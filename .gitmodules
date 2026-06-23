@@ -1,0 +1,6 @@
+[submodule "skills/coral-skills"]
+	path = skills/coral-skills
+	url = https://github.com/Coral-Protocol/coral-skill-set
+[submodule "skills/solana-skill"]
+	path = skills/solana-skill
+	url = https://github.com/solana-foundation/solana-dev-skill

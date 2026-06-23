@@ -1,1 +1,0 @@
-this is a readme — text file with Windows-1251 encoding
