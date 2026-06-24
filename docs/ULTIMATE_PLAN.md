@@ -31,9 +31,9 @@ A fully working **agentic payment marketplace** where:
 │  Marketplace → Payment → Result  (3 screens)                     │
 │  Wallet adapter: Phantom signs depositFunds on Anchor escrow      │
 └────────────────────────┬─────────────────────────────────────────┘
-                         │ HTTP (typescript_sdk/sdk CoralClient)
+                         │ HTTP (sdk/sdk CoralClient)
 ┌────────────────────────▼─────────────────────────────────────────┐
-│  coral-server/   Axum REST API (port 8080)                        │
+│  api/   Axum REST API (port 8080)                        │
 │  /agents  /workflows  /messages  /state                           │
 │  /solana-pay  /pay-demo  /coralos/mcp/join                        │
 └────────────────────────┬─────────────────────────────────────────┘
@@ -73,11 +73,11 @@ Rust agents currently join CoralOS but reply with a hardcoded stub. These change
 | `agent-core/src/strategy.rs` | Override in `PaymentStrategy` (run demo_payment_flow) |
 | `agent-core/src/agent.rs` | Add `get_strategy()` and `state_arc()` methods |
 | `agent-core/src/manager.rs` | Add `get_agent(id)` returning `Option<Arc<Agent>>` |
-| `coral-server/src/api/coralos.rs` | Wire mention dispatch: call `strategy.handle_message()` instead of stub |
-| `agent_demo/src-ui/src/transport.ts` | Add `coralos_mcp_join` and `coralos_mcp_status` to httpDispatch |
-| `agent_demo/src-ui/src/App.tsx` | Add MCP join card to CoralOS tab |
-| `agent_demo/src-ui/src/App.tsx` | Fix coralUrl default: 8080 → 5555 |
-| `agent_demo/src-ui/src/App.tsx` | Add coral-mention / coral-url-generated / coral-payment-result badge classes |
+| `api/src/api/coralos.rs` | Wire mention dispatch: call `strategy.handle_message()` instead of stub |
+| `web/app/transport.ts` | Add `coralos_mcp_join` and `coralos_mcp_status` to httpDispatch |
+| `web/app/App.tsx` | Add MCP join card to CoralOS tab |
+| `web/app/App.tsx` | Fix coralUrl default: 8080 → 5555 |
+| `web/app/App.tsx` | Add coral-mention / coral-url-generated / coral-payment-result badge classes |
 
 **Result after Phase 1:** Any Coral orchestrator (Claude Code, Hermes, Puppet) can send a mention to a local Rust agent and get back a real Solana Pay URL, a payment validation result, or a full 402 payment flow — over MCP, in the Coral thread.
 
@@ -94,8 +94,8 @@ Adds trustless on-chain escrow so neither seller nor buyer has to trust the othe
 | `programs/escrow/Cargo.toml` | Anchor program workspace member |
 | `programs/escrow/src/lib.rs` | `create_escrow`, `deposit_funds`, `claim_funds`, `refund` instructions |
 | `agent-core/src/solana_pay/anchor_escrow.rs` | Rust `AnchorEscrowStrategy` — creates escrow PDA, watches for deposit, claims |
-| `typescript_sdk/agent-core-ts/src/strategies/anchor_escrow.ts` | TypeScript buyer strategy — builds `deposit_funds` tx for Phantom to sign |
-| `agent_demo/src-ui/src/AnchorDemo.tsx` | React tab: wallet connect + pay button + escrow status |
+| `sdk/agent-core-ts/src/strategies/anchor_escrow.ts` | TypeScript buyer strategy — builds `deposit_funds` tx for Phantom to sign |
+| `web/app/AnchorDemo.tsx` | React tab: wallet connect + pay button + escrow status |
 
 **Result after Phase 2:** The existing Helius monitor watches the escrow PDA instead of a plain wallet. Seller never sees funds until Anchor confirms delivery. User signs exactly one transaction in Phantom.
 
@@ -121,7 +121,7 @@ web/
     PayButton.tsx         — Builds + signs Anchor depositFunds tx
     AgentLiveLog.tsx      — Real-time agent action feed (polls /agents/:id)
   lib/
-    coral.ts              — CoralClient instance (typescript_sdk/sdk)
+    coral.ts              — CoralClient instance (sdk/sdk)
     anchor.ts             — Program + IDL helpers
     wallet.ts             — Wallet adapter setup
 ```
@@ -184,4 +184,4 @@ The payment rail, escrow, monitoring, and CoralOS coordination work identically 
 | Phase 4: Demo wiring | 0 (config + env vars only) | — |
 | **Total** | **~27** | |
 
-No existing Tauri commands break. No existing REST routes change. All additions are additive.
+No existing REST routes change. All additions are additive. (Tauri has been removed — the stack is now web/ + api/ + runtime/.)

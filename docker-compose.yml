@@ -1,0 +1,45 @@
+services:
+  # ── TypeScript API ────────────────────────────────────────────────────────
+  api-ts:
+    build:
+      context: .
+      dockerfile: api-ts/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      - HELIUS_API_KEY=${HELIUS_API_KEY}
+      - SOLANA_RPC_URL=${SOLANA_RPC_URL:-https://api.devnet.solana.com}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ── Web frontend ──────────────────────────────────────────────────────────
+  web:
+    build:
+      context: web
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_CORAL_SERVER=http://api-ts:8081
+        - NEXT_PUBLIC_HELIUS_RPC=${SOLANA_RPC_URL:-https://api.devnet.solana.com}
+    ports:
+      - "3000:3000"
+    depends_on:
+      api-ts:
+        condition: service_healthy
+
+  # ── CoralOS multi-agent swarm ─────────────────────────────────────────────
+  coral:
+    image: ghcr.io/coral-protocol/coral-server:latest
+    container_name: coral-test
+    ports:
+      - "5555:5555"
+    environment:
+      - CONFIG_FILE_PATH=/config/config.toml
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./docs/coral/config.toml:/config/config.toml:ro
+      - ./coral-agents:/agents:ro
+    profiles: [coral]
+    restart: unless-stopped

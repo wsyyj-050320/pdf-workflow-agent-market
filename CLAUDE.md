@@ -4,120 +4,90 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Repo Is
 
-A monorepo for a Solana payment infrastructure project. The root-level README and CONTRIBUTING.md describe `pay` — a CLI tool that handles HTTP 402 payment challenges (MPP and x402 protocols) with stablecoin signing. The active code in this working directory is the **desktop** and **api** components.
+A TypeScript-first monorepo for a Solana agent-economy starter kit. Agents request, pay, and settle on-chain automatically using Solana Pay. CoralOS coordinates multi-agent sessions. The stack is Node.js throughout — no Rust, no Cargo.
 
 ## Repo Layout
 
 | Directory | Purpose |
 |-----------|---------|
-| `desktop/` | Tauri desktop app — multi-agent developer dashboard |
-| `desktop/agent-core/` | Rust library: agent lifecycle, workflows, messaging, Solana Pay, Jito |
-| `desktop/src-tauri/` | Tauri backend: Tauri IPC commands, CoralOS HTTP client |
-| `desktop/src-ui/` | React frontend: Vite + Tailwind + @xyflow/react + zustand |
-| `api/` | Axum REST API wrapping `agent-core` (runs on port 8080) |
-| `api-ts/` | Node.js/Express REST API wrapping TypeScript strategies (runs on port 8081) |
-| `sdk/` | TypeScript SDK — `agent-core-ts` mirrors Rust agent-core; `sdk/` is the CoralClient HTTP wrapper |
-| `web/` | Next.js consumer marketplace — Phantom wallet payment flow |
-| `claude-skills/` | Claude Code skills for this project |
-| `docs/` | Design documents and CoralOS reference config |
-| `ref/` | Reference implementations (payment debugger) — read-only |
+| `api-ts/` | Express REST API — the primary server (port 8081) |
+| `sdk/agent-core-ts/` | TypeScript agent runtime: `AgentManager`, `Strategy`, `MessageBus`, `SharedState`, `WorkflowEngine`, Solana Pay strategies |
+| `sdk/sdk/` | `CoralClient` — typed HTTP wrapper for `api-ts/` |
+| `web/` | Next.js consumer marketplace — Phantom wallet payment flow (port 3000) |
+| `coral-agents/` | Python MCP agents launched by CoralOS: `helius_monitor`, `user_proxy` |
+| `docs/` | Design documents, CoralOS config, restructure plan |
+| `e2e/` | Playwright end-to-end tests |
 
 ## Commands
 
-### desktop (Tauri)
+### api-ts (primary server)
 
 ```sh
-# Install UI dependencies
-cd desktop/src-ui && npm install
-
-# Build agent-core
-cd desktop && cargo build
-
-# Run in dev mode (starts Vite dev server + Tauri)
-cd desktop/src-tauri && cargo tauri dev
+cd api-ts && npm install   # once
+cd api-ts && npm run dev   # dev server on :8081 with hot reload
+cd api-ts && npm test      # unit tests
+cd api-ts && npm run typecheck
 ```
 
-### api (Axum REST API — Rust)
+### sdk/agent-core-ts (agent runtime)
 
 ```sh
-# Run the server (listens on http://0.0.0.0:8080)
-cd api && cargo run
-
-# Build
-cd api && cargo build --release
+cd sdk/agent-core-ts && npm install
+cd sdk/agent-core-ts && npm run typecheck
+cd sdk/agent-core-ts && npm test
 ```
 
-### api-ts (Express REST API — TypeScript)
+### web (Next.js)
 
 ```sh
-# Install dependencies (only needed once)
-cd api-ts && npm install
-
-# Run in dev mode with hot reload
-cd api-ts && npm run dev
-
-# Server listens on http://0.0.0.0:8081
-# Set NEXT_PUBLIC_CORAL_SERVER=http://localhost:8081 in web/.env.local to use it
+cd web && npm install
+cd web && npm run dev      # :3000, points at api-ts :8081 by default
+cd web && npm run build
 ```
 
-### Rust workspace (desktop)
+### coral-agents (Python, requires Docker)
 
 ```sh
-cd desktop
-
-cargo build              # debug build
-cargo build --release    # release build
-cargo test               # all tests
-cargo test -p agent-core # single crate tests
-cargo clippy --workspace --all-targets -- -D warnings   # lint
-cargo fmt --check        # format check
-cargo fmt                # auto-format
+cd coral-agents/helius_monitor && docker build -t helius-monitor:0.1.0 .
+cd coral-agents/user_proxy    && docker build -t user-proxy:0.1.0 .
+# Then start CoralOS: docker compose --profile coral up
 ```
 
 ## Architecture
 
-### agent-core (Rust library)
+### sdk/agent-core-ts
 
-The central library used by both `src-tauri` and `api`. Key modules:
+The central TypeScript library. Key modules:
 
-- **`agent.rs` / `AgentState`** — An agent holds a pluggable `Strategy` and an action log. Strategies are `async_trait` objects (`RpcPollStrategy`, `IdleStrategy`, Solana Pay strategies).
-- **`manager.rs` / `AgentManager`** — Creates, stores, and drives multiple agents. Uses `BTreeMap` keyed by string ID. Also owns `MessageBus`, `SharedState`, and `WorkflowEngine`.
-- **`message_bus.rs`** — Broadcast/direct messaging between agents (`AgentMessage`).
-- **`shared_state.rs`** — Key-value store (`SharedStateEntry`) with versioning and change history, accessible to all agents.
-- **`orchestrator/`** — `Workflow` (DAG of `WorkflowStep`s with dependencies) + `WorkflowEngine` that dispatches steps to agents.
-- **`role.rs`** — `AgentRole` enum (`Leader`, `Worker`, `Trader`, etc.) with associated `RolePermissions`.
-- **`solana_pay/`** — Solana Pay URL parsing, MPP/x402 payment challenge logic, transfer/payment strategies, and validation helpers.
-- **`helius.rs` / `jito.rs`** — Helius RPC and Jito bundle integrations.
+- **`agent.ts` / `AgentState`** — agent holds a pluggable `Strategy` and action log
+- **`manager.ts` / `AgentManager`** — creates, stores, drives agents; owns `MessageBus`, `SharedState`, `WorkflowEngine`
+- **`strategy.ts` / `BaseStrategy`** — `async run(state, signal)` + `handleMessage(text, state)` interface
+- **`message_bus.ts`** — broadcast/direct messaging between agents
+- **`shared_state.ts`** — versioned key-value store accessible to all agents
+- **`workflow.ts`** — DAG of `WorkflowStep`s with dependency ordering
+- **`coral_mcp.ts`** — MCP client for joining CoralOS sessions
+- **`strategies/`** — `HeliusMonitorStrategy`, `TransferStrategy`, `PaymentStrategy`, `WeatherStrategy`, `IdleStrategy`
 
-### src-tauri (Tauri backend)
+### api-ts
 
-- **`main.rs`** — All `#[tauri::command]` handlers. Wraps `AgentManager` in `Mutex<AgentManager>` and `CoralOSClient` in `Mutex<CoralOSClient>`.
-- **`coralos.rs`** — Lightweight HTTP client that talks to a remote CoralOS server (session/agent APIs via `reqwest`).
+Express server exposing `sdk/agent-core-ts` over HTTP at `/api/v1/`:
+- `/agents` — CRUD + start/stop/handle
+- `/shared-state` — key-value read/write
+- `/messages` — message bus
+- `/weather` — demo paid endpoint
 
-### api (Axum REST API)
+### web
 
-Exposes `agent-core` over HTTP at `/api/v1/`:
-- `/agents` — CRUD for agents
-- `/workflows` — Workflow management
-- `/messages` — Message bus access
-- `/shared-state` — Shared state read/write
-- `/payments` — Payment flow records
-- `/swarm` — CoralOS swarm proxy
-- `/weather` — Example: WeatherStrategy endpoint
+Next.js 14 marketplace. Connects to `api-ts` via `NEXT_PUBLIC_CORAL_SERVER` (default `http://localhost:8081`).
 
-### api-ts (Express REST API)
+### coral-agents (Python + CoralOS)
 
-TypeScript mirror of `api` — same REST surface, runs strategies from `sdk/agent-core-ts`.
-Students swap backends by changing `NEXT_PUBLIC_CORAL_SERVER`.
-
-### src-ui (React frontend)
-
-Single-file `App.tsx` using Tauri IPC (`invoke`) to call all Rust commands. State is managed locally with `useState`/`useEffect`. Uses `@xyflow/react` for workflow DAG visualization and `zustand` if global store is needed.
+`helius_monitor` — watches a Solana wallet via WebSocket, reports payments to CoralOS thread.  
+`user_proxy` — puppet agent; lets Claude Code send messages into a CoralOS session.
 
 ## Key Constraints
 
-- **Tauri IPC boundary** — all Rust → UI data must be `Serialize`/`Deserialize`. Add `#[derive(Serialize, Deserialize)]` to any new types crossing the boundary.
-- **Agent strategies are `Send + Sync`** — required by the `async_trait` `Strategy` trait. Use `Arc<Mutex<_>>` for any interior state.
-- **`AgentManager` uses `Mutex` not `RwLock`** — write-heavy operations dominate; don't switch without profiling.
-- **Yellowstone gRPC (Triton)** is stubbed out — the dependency is commented in `agent-core/Cargo.toml`. Don't uncomment without adding the client crate.
-- **CoralOS integration** in `src-tauri` makes real HTTP calls to a configurable base URL — default is empty and must be set at runtime via `set_coralos_url`.
+- **`Strategy.run()` must respect the `AbortSignal`** — check `signal.aborted` in polling loops and return cleanly.
+- **`AgentManager` is not thread-safe across Node.js workers** — keep it in the main process; use message passing if you need workers.
+- **CoralOS requires Docker** — coral-agents are launched as Docker containers by the CoralOS server. Build images before running `--profile coral`.
+- **Devnet only** — all Solana operations target devnet. Never use a funded mainnet keypair in `.env`.

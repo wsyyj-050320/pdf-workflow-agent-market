@@ -1,6 +1,6 @@
 # @pay/agent-core-ts
 
-TypeScript multi-agent runtime that mirrors the Rust `agent-core` library concept-for-concept. Use this package to build and run Solana-aware agents entirely in Node.js or the browser — no Tauri required. It pairs with `@pay/sdk` (the HTTP client for coral-server) and with `CoralMcpAgent` for CoralOS MCP sessions.
+TypeScript multi-agent runtime that mirrors the Rust `agent-core` library concept-for-concept. Use this package to build and run Solana-aware agents entirely in Node.js or the browser. It pairs with `@pay/sdk` (the HTTP client for coral-server) and with `CoralMcpAgent` for CoralOS MCP sessions.
 
 ## Table of Contents
 
@@ -1016,7 +1016,7 @@ async function main() {
   manager.createAgent('buyer', new RpcPollStrategy(8_000))
   manager.setRole('buyer', AgentRole.Worker)
 
-  // Wire them to coral-server so the Tauri UI can see them
+  // Wire them to coral-server so the web UI can see them
   const sync = new CoralServerSync()
   await sync.attach(manager, 'http://localhost:8080')
 

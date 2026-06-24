@@ -1,0 +1,52 @@
+# Track 3 — Consumer Checkout (Phantom wallet)
+# Usage: docker compose up
+# Then open: http://localhost:3000/track-3
+#
+# Human connects Phantom, pays SOL, gets result instantly
+# Fork: coral-agents/seller-agent/src/service.ts
+
+services:
+  coral:
+    image: ghcr.io/coral-protocol/coral-server:latest
+    container_name: coral-track-3
+    ports:
+      - "5555:5555"
+    environment:
+      - CONFIG_FILE_PATH=/config/config.toml
+      - SELLER_WALLET=${WALLET}
+      - PRICE_SOL=${PRICE_SOL:-0.00005}
+      - SERVICE=${SERVICE:-jupiter}
+      - SOLANA_RPC_URL=${SOLANA_RPC_URL:-https://api.devnet.solana.com}
+      - HELIUS_API_KEY=${HELIUS_API_KEY}
+      - JUPITER_API_KEY=${JUPITER_API_KEY}
+      - NEWS_API_KEY=${NEWS_API_KEY}
+      - WALLET=${WALLET}
+      - AMOUNT_SOL=${PRICE_SOL:-0.00005}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ../../docs/coral/track-3-config.toml:/config/config.toml:ro
+      - ../../coral-agents:/agents:ro
+    restart: unless-stopped
+
+  web:
+    image: ghcr.io/trilltino/web:latest
+    container_name: web-track-3
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_CORAL_SERVER=http://coral:5555
+      - NEXT_PUBLIC_API_SERVER=http://api-ts:8081
+      - NEXT_PUBLIC_SELLER_WALLET=${WALLET}
+      - NEXT_PUBLIC_PRICE_SOL=${PRICE_SOL:-0.00005}
+    depends_on:
+      - coral
+
+  api-ts:
+    image: ghcr.io/trilltino/api-ts:latest
+    container_name: api-ts-track-3
+    ports:
+      - "8081:8081"
+    environment:
+      - HELIUS_API_KEY=${HELIUS_API_KEY}
+      - SOLANA_RPC_URL=${SOLANA_RPC_URL:-https://api.devnet.solana.com}
+      - WALLET=${WALLET}

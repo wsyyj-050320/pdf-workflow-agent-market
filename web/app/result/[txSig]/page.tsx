@@ -32,7 +32,7 @@ export default function ResultPage() {
   useEffect(() => {
     if (!prompt) { setLoading(false); return }
 
-    const base = process.env.NEXT_PUBLIC_CORAL_SERVER ?? 'http://localhost:8080'
+    const base = process.env.NEXT_PUBLIC_CORAL_SERVER ?? 'http://localhost:8081'
 
     fetch(`${base}/api/v1/weather`, {
       method: 'POST',
@@ -126,7 +126,7 @@ export default function ResultPage() {
               <p className="text-gray-500 text-xs">
                 Start the API server:{' '}
                 <span className="font-mono bg-[#0d0d15] px-1.5 py-0.5 rounded text-gray-400">
-                  cd api && cargo run
+                  cd api-ts && npm run dev
                 </span>
               </p>
             </div>

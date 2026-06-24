@@ -1,21 +1,38 @@
 import { BaseStrategy, MutableAgentState, untilAborted } from '../strategy.js'
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js'
 
+/** Configuration for `HeliusMonitorStrategy`. */
 export interface HeliusMonitorConfig {
+  /** Base58-encoded recipient public key to watch. */
   recipient: string
+  /** Minimum transfer amount in SOL required to qualify as a full payment. */
   amountSol: number
+  /** Helius API key. Omit to fall back to the public devnet endpoint. */
   apiKey?: string
+  /** Target network. Defaults to `"devnet"` when `apiKey` is omitted. */
   network?: 'devnet' | 'mainnet-beta'
 }
 
+/**
+ * Watches a Solana wallet address for incoming SOL transfers using a WebSocket
+ * `accountSubscribe` subscription (via `Connection.onAccountChange`).
+ *
+ * Fires `"payment-received"` when the balance increases by at least `amountSol`,
+ * or `"partial-payment"` for smaller positive deltas.
+ *
+ * If a Helius `apiKey` is provided, traffic goes through the Helius enhanced RPC
+ * (`helius-rpc.com`) instead of the public devnet endpoint.
+ */
 export class HeliusMonitorStrategy extends BaseStrategy {
   readonly name = 'helius-monitor'
   private config: HeliusMonitorConfig
 
   constructor(config: HeliusMonitorConfig) {
+    super()
     this.config = config
   }
 
+  /** Build the HTTPS RPC URL, preferring Helius if an API key is configured. */
   private rpcUrl(): string {
     if (this.config.apiKey) {
       const net = this.config.network === 'mainnet-beta' ? 'mainnet' : 'devnet'
@@ -24,6 +41,7 @@ export class HeliusMonitorStrategy extends BaseStrategy {
     return 'https://api.devnet.solana.com'
   }
 
+  /** Build the WebSocket URL that mirrors the RPC URL above. */
   private wsUrl(): string {
     if (this.config.apiKey) {
       const net = this.config.network === 'mainnet-beta' ? 'mainnet' : 'devnet'
@@ -41,6 +59,7 @@ export class HeliusMonitorStrategy extends BaseStrategy {
     const pubkey = new PublicKey(this.config.recipient)
     const expectedLamports = Math.round(this.config.amountSol * LAMPORTS_PER_SOL)
 
+    // Capture baseline balance so we can compute inbound deltas.
     let lastLamports = 0
     try {
       const info = await conn.getAccountInfo(pubkey)

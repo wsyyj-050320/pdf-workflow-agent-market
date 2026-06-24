@@ -12,8 +12,8 @@ npm install
 cp .env.local.example .env.local
 # fill in NEXT_PUBLIC_HELIUS_RPC with your key from helius.dev
 
-# 3. Start coral-server in another terminal
-cd ../coral-server && cargo run
+# 3. Start the Rust API in another terminal
+cd ../api && cargo run
 
 # 4. Start the web app
 npm run dev
@@ -26,7 +26,7 @@ npm run dev
 - **Tailwind CSS** — dark theme with Solana brand colours
 - **@solana/wallet-adapter-react** — Phantom wallet connection
 - **@coral-xyz/anchor** — Anchor escrow program client (Phase 2)
-- **typescript_sdk/sdk** — CoralClient HTTP wrapper for coral-server
+- **sdk/sdk** — CoralClient HTTP wrapper for the Rust API
 
 ## Pages
 
@@ -41,18 +41,18 @@ npm run dev
 ```
 Browser (Next.js)
   └─ WalletProvider   → Phantom via @solana/wallet-adapter
-  └─ lib/coral.ts     → CoralClient → coral-server :8080
+  └─ lib/coral.ts     → CoralClient → api :8080
   └─ @solana/web3.js  → Solana devnet RPC
 
-coral-server (Rust/Axum :8080)
+api/ (Rust/Axum :8080)
   └─ agent-core       → AgentManager, SharedState, WorkflowEngine
 ```
 
-## Demo flow (no coral-server needed)
+## Demo flow (no API server needed)
 
 1. Open `/` — see four agent listings
 2. Connect Phantom on devnet
 3. Click **Buy** on any agent → fill in a prompt → **Pay X SOL**
 4. Phantom signs a devnet transfer
 5. `/result/[txSig]` shows a mock JSON response after 3 s (demo fallback)
-   — replace with live data when coral-server is running
+   — replace with live data when the API server is running

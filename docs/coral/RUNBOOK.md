@@ -21,7 +21,7 @@ confirmed on 2026-06-19 (Docker Desktop, Windows).
 - Docker Desktop running.
 - Both agent images built (the server launches them by tag):
   ```sh
-  cd agent_demo/coral-agents/helius_monitor
+  cd coral-agents/helius_monitor
   docker build -t helius-monitor:0.1.0 .
 
   cd ../user_proxy
@@ -35,7 +35,7 @@ cd coral
 docker compose up -d
 ```
 
-`docker-compose.yml` mounts `../agent_demo/coral-agents` → `/agents` and
+`docker-compose.yml` mounts `../coral-agents` → `/agents` and
 `config.toml`. Key config (`config.toml`):
 
 ```toml
@@ -182,10 +182,10 @@ docker ps -aq --filter ancestor=helius-monitor:0.1.0 | xargs docker rm -f   # st
 | `coral/docker-compose.yml` · `coral/config.toml` | run the server + mount registry |
 | `coral/session2.json` | session request that launches both agents |
 | `coral/session.json` | single-agent session (no puppet; can't trigger mention externally) |
-| `agent_demo/coral-agents/helius_monitor/coral-agent.toml` | registry definition for payment monitor |
-| `agent_demo/coral-agents/helius_monitor/coral_agent.py` | the MCP agent (wait → watch → send) |
-| `agent_demo/coral-agents/helius_monitor/Dockerfile` | docker-runtime image for helius-monitor |
-| `agent_demo/coral-agents/user_proxy/coral-agent.toml` | registry definition for puppet agent |
-| `agent_demo/coral-agents/user_proxy/agent.py` | idle MCP agent (connects, then blocks for puppet API) |
-| `agent_demo/coral-agents/user_proxy/Dockerfile` | docker-runtime image for user-proxy |
+| `coral-agents/helius_monitor/coral-agent.toml` | registry definition for payment monitor |
+| `coral-agents/helius_monitor/coral_agent.py` | the MCP agent (wait → watch → send) |
+| `coral-agents/helius_monitor/Dockerfile` | docker-runtime image for helius-monitor |
+| `coral-agents/user_proxy/coral-agent.toml` | registry definition for puppet agent |
+| `coral-agents/user_proxy/agent.py` | idle MCP agent (connects, then blocks for puppet API) |
+| `coral-agents/user_proxy/Dockerfile` | docker-runtime image for user-proxy |
 | `coral/api_v1.json` | the server's OpenAPI (reference) |

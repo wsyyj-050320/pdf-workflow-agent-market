@@ -1,10 +1,17 @@
-// Strategy registry — maps strategy name → factory function.
-//
-// Students add their strategy here, then create an agent with:
-//   POST /api/v1/agents   body: { "id": "my-agent", "strategy": "my-strategy" }
-//
-// The agent immediately appears in GET /api/v1/agents and accepts
-// POST /api/v1/agents/:id/handle  body: { "text": "..." }
+/**
+ * Strategy registry — maps strategy name strings to factory functions.
+ *
+ * To add a custom strategy:
+ * 1. Add an entry to `REGISTRY` below.
+ * 2. Create an agent via HTTP:
+ *    `POST /api/v1/agents   body: { "id": "my-agent", "strategy": "my-strategy" }`
+ * 3. The agent immediately accepts:
+ *    `POST /api/v1/agents/:id/handle  body: { "text": "..." }`
+ *
+ * Solana-dependent strategies (transfer, helius-monitor) are commented out because
+ * they require `@solana/web3.js` and `@solana/pay` — uncomment after `npm install`
+ * in `sdk/agent-core-ts/`.
+ */
 
 import { AgentManager } from '../../sdk/agent-core-ts/src/manager.js'
 import type { Strategy } from '../../sdk/agent-core-ts/src/strategy.js'
@@ -12,36 +19,40 @@ import { IdleStrategy } from '../../sdk/agent-core-ts/src/strategies/idle.js'
 import { RpcPollStrategy } from '../../sdk/agent-core-ts/src/strategies/rpc_poll.js'
 import { WeatherStrategy } from '../../sdk/agent-core-ts/src/strategies/weather.js'
 
-// Solana-dependent strategies require `npm install` in typescript_sdk/agent-core-ts first:
-//   import { TransferStrategy } from '../../sdk/agent-core-ts/src/strategies/transfer.js'
-//   import { HeliusMonitorStrategy } from '../../sdk/agent-core-ts/src/strategies/helius_monitor.js'
+// import { TransferStrategy } from '../../sdk/agent-core-ts/src/strategies/transfer.js'
+// import { HeliusMonitorStrategy } from '../../sdk/agent-core-ts/src/strategies/helius_monitor.js'
 
-// ── Strategy registry ──────────────────────────────────────────────────────────
-// Map a string name to a factory that accepts an optional config object.
-// Add your own strategy here, then create an agent with:
-//   POST /api/v1/agents   body: { "id": "my-agent", "strategy": "my-strategy" }
-
+/** Factory function type — accepts an optional JSON config object, returns a `Strategy`. */
 type Factory = (config?: unknown) => Strategy
 
+/**
+ * Registry of all available strategies.
+ * Key: the `strategy` field sent in `POST /api/v1/agents`.
+ * Value: factory that instantiates the strategy from an optional config object.
+ */
 export const REGISTRY: Record<string, Factory> = {
-  'idle':     ()         => new IdleStrategy(),
+  'idle':     ()           => new IdleStrategy(),
   'rpc-poll': (c: unknown) => new RpcPollStrategy((c as { intervalMs?: number } | undefined)?.intervalMs),
-  'weather':  ()         => new WeatherStrategy(),
-  // 'transfer':       (c) => new TransferStrategy(c),       // needs @solana/web3.js
-  // 'helius-monitor': (c) => new HeliusMonitorStrategy(c),  // needs @solana/web3.js
+  'weather':  ()           => new WeatherStrategy(),
+  // 'transfer':       (c) => new TransferStrategy(c as TransferConfig),
+  // 'helius-monitor': (c) => new HeliusMonitorStrategy(c as HeliusMonitorConfig),
 }
 
+/**
+ * Instantiate a strategy by name. Throws if the name is not in `REGISTRY`.
+ * Called by `POST /api/v1/agents` to resolve the `strategy` body field.
+ */
 export function makeStrategy(name: string, config?: unknown): Strategy {
   const factory = REGISTRY[name]
   if (!factory) throw new Error(`unknown strategy: "${name}" — registered: ${Object.keys(REGISTRY).join(', ')}`)
   return factory(config)
 }
 
-// ── Singleton manager ─────────────────────────────────────────────────────────
-// One AgentManager per process — all routes share it.
+// ── Singleton manager ──────────────────────────────────────────────────────
+// One AgentManager per process. All route handlers share it.
 
 export const manager = new AgentManager()
 
-// Pre-register the default weather agent so the web marketplace works
-// without any setup step.  Students can add more via POST /api/v1/agents.
+// Pre-register the weather agent so the web marketplace works without any
+// manual setup step. Hackathon students can add more via POST /api/v1/agents.
 manager.createAgent('weather-agent', new WeatherStrategy())

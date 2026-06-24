@@ -29,7 +29,7 @@ This app demonstrates all of these working together.
 
 ## What the app actually is
 
-A desktop app (Tauri — Rust backend, React frontend) that runs a live multi-agent system. You can see the agents, watch what they are doing in real time, and trigger the full payment flow from request to confirmation.
+A web app (Next.js frontend + TypeScript REST API) that runs a live multi-agent system. You can see the agents, watch what they are doing in real time, and trigger the full payment flow from request to confirmation.
 
 It has two core demo agents:
 
@@ -151,12 +151,12 @@ Every one of these is a real use case. Every one of them works with the same pay
 
 | Directory | What it is |
 |-----------|-----------|
-| `agent_demo/agent-core/` | Rust library — agent lifecycle, roles, messaging, workflows, Solana Pay logic |
-| `agent_demo/src-tauri/` | Rust Tauri backend — IPC commands, CoralOS client |
-| `agent_demo/src-ui/` | React frontend — live agent panels, action feeds |
-| `coral-server/` | Standalone Axum REST API exposing the same agent runtime over HTTP |
-| `agent_demo/agent-core/src/helius.rs` | Helius REST client — parsed transactions, balances |
-| `agent_demo/agent-core/src/solana_pay/` | Solana Pay URL encoding/parsing, validation, payment strategies |
+| `sdk/agent-core-ts/` | TypeScript library — agent lifecycle, roles, messaging, workflows, Solana Pay logic |
+| `api-ts/` | Express REST API exposing the agent runtime over HTTP (port 8081) |
+| `web/` | Next.js consumer marketplace — Phantom wallet payment flow (port 3000) |
+| `coral-agents/` | Python MCP agents — helius_monitor, user_proxy |
+| `sdk/agent-core-ts/src/strategies/helius_monitor.ts` | Helius WebSocket account watcher |
+| `sdk/agent-core-ts/src/strategies/payment.ts` | MPP/x402 payment challenge parsing |
 
 ---
 
@@ -164,11 +164,11 @@ Every one of these is a real use case. Every one of them works with the same pay
 
 All components described in this document are implemented and working:
 
-- `TritonPaymentMonitorStrategy` — real-time WebSocket account monitoring via Helius devnet
+- `HeliusMonitorStrategy` — real-time WebSocket account monitoring via Helius devnet (`onAccountChange`)
 - Helius devnet endpoints (`https://devnet.helius-rpc.com/?api-key=...`)
 - Seller agent delivers data via pay.sh after payment confirmed on-chain
 - Two-panel Pay Demo tab in the UI showing both agents live with action feeds
 - Payment flow debugger showing the full request → 402 → payment → delivery sequence
-- Web frontend mode via `cargo run` + `npm run dev` (no Tauri required)
-- TypeScript agent runtime in `typescript_sdk/agent-core-ts/` (identical concepts to Rust)
-- HTTP SDK in `typescript_sdk/sdk/` for calling coral-server from any JS/TS project
+- Web frontend mode via `npm run dev` (api-ts) + `npm run dev` (web)
+- TypeScript agent runtime in `sdk/agent-core-ts/` (identical concepts to Rust)
+- HTTP SDK in `sdk/sdk/` for calling the API from any JS/TS project

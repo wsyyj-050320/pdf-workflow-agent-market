@@ -94,7 +94,7 @@ export default function PayPage() {
         <div className="card space-y-6">
           <div>
             <h1 className="text-xl font-bold mb-0.5">{meta.label}</h1>
-            <p className="text-gray-500 text-xs">Rust agent · Solana devnet · open-meteo.com</p>
+            <p className="text-gray-500 text-xs">Node.js agent · Solana devnet · open-meteo.com</p>
           </div>
 
           <div className="flex items-center justify-between py-3 border-y border-[#1e1e2e]">
@@ -110,11 +110,12 @@ export default function PayPage() {
               value={prompt}
               onChange={e => setPrompt(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && !busy && handlePay()}
+              data-testid="pay-prompt-input"
             />
           </div>
 
           {!publicKey ? (
-            <p className="text-center text-xs text-gray-500 py-2">
+            <p className="text-center text-xs text-gray-500 py-2" data-testid="pay-connect-prompt">
               Connect your Phantom wallet (top right) to continue
             </p>
           ) : (
@@ -123,6 +124,7 @@ export default function PayPage() {
                 className="btn-primary w-full text-sm py-3"
                 onClick={handlePay}
                 disabled={!prompt.trim() || busy}
+                data-testid="pay-submit-button"
               >
                 {busy
                   ? STATUS_LABEL[status]

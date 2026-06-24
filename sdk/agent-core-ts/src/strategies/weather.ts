@@ -1,8 +1,18 @@
 import { BaseStrategy, MutableAgentState, untilAborted } from '../strategy.js'
 
-// Mirrors Rust WeatherStrategy exactly.
-// Input to handleMessage: {"city":"London"} | {"lat":51.5,"lon":-0.1} | plain city name
-// Output: JSON string with city, temperature_c/f, humidity_pct, wind_mph, condition, fetched_at
+/**
+ * Serves live weather data from [Open-Meteo](https://open-meteo.com/) (no API key required).
+ *
+ * Send a message to trigger a lookup:
+ * - `{"city":"London"}` — geocode city name then fetch weather
+ * - `{"lat":51.5,"lon":-0.1}` — skip geocoding, fetch directly
+ * - `"Tokyo"` — plain city name (same as `{"city":"Tokyo"}`)
+ *
+ * Returns a JSON string with `city`, `temperature_c/f`, `humidity_pct`, `wind_mph`,
+ * `condition`, and `fetched_at` fields.
+ *
+ * Mirrors the Rust `WeatherStrategy`.
+ */
 export class WeatherStrategy extends BaseStrategy {
   readonly name = 'weather'
 
@@ -40,10 +50,13 @@ interface WeatherResult {
   fetched_at: string
 }
 
+/**
+ * Top-level weather lookup. Accepts JSON or a plain city string.
+ * Geocodes the city if lat/lon are not provided directly.
+ */
 async function fetchWeather(text: string): Promise<WeatherResult> {
   let lat: number, lon: number, cityName: string
 
-  // Parse input — accept JSON object or plain city name
   let parsed: Record<string, unknown> | null = null
   try { parsed = JSON.parse(text) as Record<string, unknown> } catch { /* plain text */ }
 
@@ -60,6 +73,10 @@ async function fetchWeather(text: string): Promise<WeatherResult> {
   return fetchForecast(lat, lon, cityName)
 }
 
+/**
+ * Resolve a city name to coordinates using the Open-Meteo geocoding API.
+ * @throws if the city name is not found or the request fails.
+ */
 async function geocode(city: string): Promise<{ lat: number; lon: number; cityName: string }> {
   const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=en&format=json`
   const res = await fetch(url)
@@ -70,6 +87,10 @@ async function geocode(city: string): Promise<{ lat: number; lon: number; cityNa
   return { lat: first.latitude, lon: first.longitude, cityName: first.name }
 }
 
+/**
+ * Fetch the current conditions for a lat/lon pair from the Open-Meteo forecast API.
+ * Returns temperature in both Celsius and Fahrenheit, humidity, wind speed, and a WMO condition label.
+ */
 async function fetchForecast(lat: number, lon: number, cityName: string): Promise<WeatherResult> {
   const url =
     `https://api.open-meteo.com/v1/forecast` +
@@ -90,8 +111,7 @@ async function fetchForecast(lat: number, lon: number, cityName: string): Promis
   const tempC = c.temperature_2m
   return {
     city: cityName,
-    lat,
-    lon,
+    lat, lon,
     temperature_c: tempC,
     temperature_f: Math.round((tempC * 9 / 5 + 32) * 10) / 10,
     humidity_pct: c.relative_humidity_2m,
@@ -103,6 +123,10 @@ async function fetchForecast(lat: number, lon: number, cityName: string): Promis
   }
 }
 
+/**
+ * Translate a WMO weather interpretation code to a human-readable label.
+ * Code table: https://open-meteo.com/en/docs#weathervariables
+ */
 function wmoLabel(code: number): string {
   if (code === 0) return 'Clear sky'
   if (code === 1) return 'Mainly clear'

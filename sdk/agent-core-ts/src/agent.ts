@@ -2,6 +2,17 @@ import { AgentAction, AgentState } from './types.js'
 import type { Strategy, MutableAgentState } from './strategy.js'
 import { AgentRole } from './role.js'
 
+/**
+ * A single autonomous agent. Holds one pluggable `Strategy` and an action log.
+ *
+ * Lifecycle:
+ * 1. Create: `new Agent(id, strategy)` — agent is idle.
+ * 2. Start:  `await agent.start()` — spawns the strategy loop via `AbortController`.
+ * 3. Stop:   `agent.stop()` — aborts the loop; the strategy resolves cleanly.
+ *
+ * The agent's mutable state (actions, RPC endpoint, etc.) is accessed through a
+ * `MutableAgentState` view created via `makeMutable()` and passed into the strategy.
+ */
 export class Agent {
   readonly id: string
   private _strategy: Strategy
@@ -10,6 +21,8 @@ export class Agent {
   private _network = 'devnet'
   private _actions: AgentAction[] = []
   private _abortController: AbortController | null = null
+
+  /** The agent's current role. Defaults to `Worker`. */
   role: AgentRole = AgentRole.Worker
 
   constructor(id: string, strategy: Strategy) {
@@ -17,13 +30,26 @@ export class Agent {
     this._strategy = strategy
   }
 
+  /** `true` while the strategy loop is actively running. */
   get isRunning(): boolean { return this._running }
+
+  /** The currently attached strategy object. */
   get strategy(): Strategy { return this._strategy }
 
+  /**
+   * Hot-swap the strategy. The swap takes effect on the **next** `start()` call;
+   * it does not restart a running agent.
+   */
   setStrategy(strategy: Strategy): void {
     this._strategy = strategy
   }
 
+  /**
+   * Override the Solana RPC endpoint. Automatically infers `network` from the URL:
+   * - Contains `"devnet"` → `"devnet"`
+   * - Contains `"testnet"` → `"testnet"`
+   * - Contains `"mainnet"` → `"mainnet-beta"`
+   */
   setRpc(url: string): void {
     this._rpcEndpoint = url
     const url_ = url.toLowerCase()
@@ -32,6 +58,10 @@ export class Agent {
     else if (url_.includes('mainnet')) this._network = 'mainnet-beta'
   }
 
+  /**
+   * Append an action to the agent's log. Capped at 500 entries; oldest are evicted.
+   * Called by strategies via `MutableAgentState.recordAction`.
+   */
   recordAction(actionType: string, details: string, txSignature?: string, slot?: number): void {
     this._actions.push({
       timestamp: new Date().toISOString(),
@@ -41,10 +71,10 @@ export class Agent {
       slot: slot ?? null,
       latency_ms: 0,
     })
-    // cap at 500
     if (this._actions.length > 500) this._actions.splice(0, this._actions.length - 500)
   }
 
+  /** Return a serialisable snapshot of the current state. Actions array is a shallow copy. */
   state(): AgentState {
     return {
       is_running: this._running,
@@ -55,7 +85,11 @@ export class Agent {
     }
   }
 
-  // Build the MutableAgentState view used by strategies.
+  /**
+   * Build the `MutableAgentState` view passed into `Strategy.run()` and
+   * `Strategy.handleMessage()`. The view proxies reads to the current field values
+   * so strategies always see up-to-date config without holding a reference to `Agent`.
+   */
   private makeMutable(): MutableAgentState {
     const agent = this
     return {
@@ -67,12 +101,19 @@ export class Agent {
     }
   }
 
-  // Deliver a message to this agent's strategy and return its response.
-  // Mirrors Rust agent.get_strategy().handle_message(text, state_arc).
+  /**
+   * Deliver a message to this agent's strategy and return its response.
+   * Mirrors Rust: `agent.get_strategy().handle_message(text, state_arc)`.
+   */
   async handleMessage(text: string): Promise<string> {
     return this._strategy.handleMessage(text, this.makeMutable())
   }
 
+  /**
+   * Start the strategy loop. Returns `false` if the agent is already running.
+   * Errors thrown by the strategy after the abort signal fires are silently ignored;
+   * errors before the signal is fired are recorded as `"strategy-error"` actions.
+   */
   async start(): Promise<boolean> {
     if (this._running) return false
     this._running = true
@@ -94,6 +135,10 @@ export class Agent {
     return true
   }
 
+  /**
+   * Signal the strategy loop to stop by aborting the `AbortController`.
+   * Returns `false` if the agent was not running.
+   */
   stop(): boolean {
     if (!this._running) return false
     this._abortController?.abort()

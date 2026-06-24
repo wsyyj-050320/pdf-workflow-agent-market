@@ -1,35 +1,33 @@
+# Editor
 .idea
 .vscode
 .DS_Store
 
-# TypeScript
-node_modules
-build
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+.next/
+tsconfig.tsbuildinfo
+
+# Secrets — students fill these in themselves
 .env
-.next
+.env.local
+*.key
+*.pem
+buyer-keypair.json
+seller-keypair.json
+
+# Locks (students generate on npm install)
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
-!typescript/pnpm-lock.yaml
-!pdb/pnpm-lock.yaml
 bun.lock
 bun.lockb
-tsconfig.tsbuildinfo
-dist/
-.vercel
 
-# CLI binary (downloaded at runtime by run.js)
-typescript/packages/solana-pay/core/bin/
-
-# Rust
-rust/target
-coral-server/target
-target/
-*.swp
-*.swo
-
-# Example
-rust/example/node_modules
-rust/example/pnpm-lock.yaml
+# Misc
 *.log
 coverage*.json
+.vercel

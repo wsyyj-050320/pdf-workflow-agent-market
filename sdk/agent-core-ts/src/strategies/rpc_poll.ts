@@ -1,11 +1,22 @@
 import { BaseStrategy, MutableAgentState, untilAborted } from '../strategy.js'
 import { Connection } from '@solana/web3.js'
 
+/**
+ * Simple liveness-check strategy. Polls `getSlot()` on the configured Solana RPC
+ * endpoint at a fixed interval and records each slot number as a `"poll-tick"` action.
+ *
+ * Useful as a canary — if `"poll-tick"` stops appearing in the action log, the RPC
+ * endpoint is unreachable.
+ */
 export class RpcPollStrategy extends BaseStrategy {
   readonly name = 'rpc-poll'
   private intervalMs: number
 
+  /**
+   * @param intervalMs - How often to poll the RPC endpoint. Defaults to 10 seconds.
+   */
   constructor(intervalMs = 10_000) {
+    super()
     this.intervalMs = intervalMs
   }
 
@@ -13,7 +24,6 @@ export class RpcPollStrategy extends BaseStrategy {
     const conn = new Connection(state.rpcEndpoint)
 
     while (!signal.aborted) {
-      const start = Date.now()
       try {
         const slot = await conn.getSlot()
         state.recordAction('poll-tick', `slot=${slot}`, undefined, slot)

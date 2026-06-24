@@ -1,6 +1,6 @@
 # @pay/sdk
 
-Typed HTTP client for [coral-server](../../coral-server) — the Axum REST API wrapping `agent-core`. Every endpoint on `coral-server` is exposed as a typed method. Zero runtime dependencies: `@pay/sdk` uses the built-in `fetch` API only.
+Typed HTTP client for the Axum REST API (`api/`) wrapping `agent-core`. Every endpoint on `api/` is exposed as a typed method. Zero runtime dependencies: `@pay/sdk` uses the built-in `fetch` API only.
 
 ## Table of Contents
 
@@ -23,7 +23,7 @@ Typed HTTP client for [coral-server](../../coral-server) — the Axum REST API w
 ## Installation
 
 ```bash
-cd typescript_sdk/sdk
+cd sdk/sdk
 npm install
 npm run build
 ```
@@ -37,7 +37,7 @@ import { CoralClient } from '@pay/sdk'
 Or directly:
 
 ```typescript
-import { CoralClient } from '../typescript_sdk/sdk/src/index.js'
+import { CoralClient } from '../sdk/sdk/src/index.js'
 ```
 
 ---

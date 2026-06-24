@@ -30,7 +30,7 @@ export interface CoralMcpConfig {
 
 export class CoralMcpAgent {
   private client: Client | null = null
-  private toolNames: { waitForMention: string; sendMessage: string } | null = null
+  private toolNames: { waitForMention: string; sendMessage: string; createThread: string } | null = null
   private config: CoralMcpConfig
 
   constructor(config: CoralMcpConfig) {
@@ -60,9 +60,11 @@ export class CoralMcpAgent {
     this.toolNames = {
       waitForMention:
         names.find((n) => n.includes("wait_for_mention")) ??
-        "coral_wait_for_mentions",
+        "coral_wait_for_mention",
       sendMessage:
         names.find((n) => n.endsWith("send_message")) ?? "coral_send_message",
+      createThread:
+        names.find((n) => n.includes("create_thread")) ?? "coral_create_thread",
     }
 
     console.error(
@@ -79,7 +81,7 @@ export class CoralMcpAgent {
 
     const result = await this.client.callTool({
       name: this.toolNames.waitForMention,
-      arguments: { maxWaitMs },
+      arguments: { maxWaitMs, currentUnixTime: Date.now() },
     })
 
     // Extract text from content array
@@ -93,25 +95,49 @@ export class CoralMcpAgent {
       return null
     }
 
-    return parseMention(text)
+    const mention = parseMention(text)
+    // parseMention returns empty text for timeout responses
+    if (!mention.text) return null
+    return mention
   }
 
-  /** Send a message into a CoralOS thread. */
+  /** Send a message into a CoralOS thread. threadId and mentions are required by the API. */
   async sendMessage(
     content: string,
-    threadId?: string,
-    mentions?: string[],
+    threadId: string,
+    mentions: string[] = [],
   ): Promise<void> {
     if (!this.client || !this.toolNames) throw new Error("Not connected")
 
-    const args: Record<string, unknown> = { content }
-    if (threadId) args.threadId = threadId
-    if (mentions?.length) args.mentions = mentions
-
     await this.client.callTool({
       name: this.toolNames.sendMessage,
-      arguments: args,
+      arguments: { threadId, content, mentions },
     })
+  }
+
+  /** Create a new CoralOS thread and return its ID. */
+  async createThread(threadName: string, participantNames: string[]): Promise<string> {
+    if (!this.client || !this.toolNames) throw new Error("Not connected")
+
+    const result = await this.client.callTool({
+      name: this.toolNames.createThread,
+      arguments: { threadName, participantNames },
+    })
+
+    const text = (result.content as Array<{ type: string; text?: string }>)
+      .filter((c) => c.type === "text")
+      .map((c) => c.text ?? "")
+      .join(" ")
+      .trim()
+
+    try {
+      const data = JSON.parse(text) as Record<string, unknown>
+      // CoralOS wraps: {"thread":{"id":"...","name":"...",...}}
+      const thread = data.thread as Record<string, unknown> | undefined
+      return (thread?.id as string) ?? (data.threadId as string) ?? (data.id as string) ?? text
+    } catch {
+      return text
+    }
   }
 
   /**
@@ -139,10 +165,14 @@ export class CoralMcpAgent {
 
         const response = await handler(mention)
 
+        if (!mention.threadId) {
+          console.error('[coral-mcp] mention has no threadId — cannot reply')
+          continue
+        }
         await this.sendMessage(
           response,
           mention.threadId,
-          mention.sender ? [mention.sender] : undefined,
+          mention.sender ? [mention.sender] : [],
         )
 
         console.error(`[coral-mcp] responded: ${response.slice(0, 120)}`)
@@ -162,59 +192,53 @@ export class CoralMcpAgent {
 }
 
 /**
- * Parse the JSON blob returned by coral_wait_for_mentions.
- * Handles all known CoralOS message shapes, mirroring _parse_mention in Python.
+ * Parse the JSON blob returned by coral_wait_for_mention.
+ * Extracts threadId, sender, and the actual message text (not the JSON wrapper).
  */
-function parseMention(text: string): CoralMention {
+function parseMention(raw: string): CoralMention {
   let threadId: string | undefined
   let sender: string | undefined
+  let messageText = raw // fallback to raw if not JSON
 
   try {
-    const data: Record<string, unknown> = JSON.parse(text)
+    const data: Record<string, unknown> = JSON.parse(raw)
 
-    threadId =
-      (data.threadId as string) ?? (data.thread_id as string) ?? undefined
+    // Timeout response — caller should treat as null
+    if (data.status === "Timeout reached" || data.status === "timeout") {
+      return { threadId: undefined, sender: undefined, text: "" }
+    }
+
+    threadId = (data.threadId as string) ?? (data.thread_id as string) ?? undefined
     sender =
-      (data.senderName as string) ??
-      (data.sender as string) ??
-      (data.senderId as string) ??
-      (data.from as string) ??
-      undefined
+      (data.senderName as string) ?? (data.sender as string) ??
+      (data.senderId as string) ?? (data.from as string) ?? undefined
 
-    // Nested messages list (current Coral server format)
+    // Nested messages list — current CoralOS format
     if (Array.isArray(data.messages) && data.messages.length > 0) {
       const m0 = data.messages[0] as Record<string, unknown>
-      threadId =
-        threadId ??
-        (m0.threadId as string) ??
-        (m0.thread_id as string) ??
-        undefined
-      sender =
-        sender ??
-        (m0.senderName as string) ??
-        (m0.sender as string) ??
-        (m0.senderId as string) ??
-        undefined
+      threadId = threadId ?? (m0.threadId as string) ?? (m0.thread_id as string) ?? undefined
+      sender = sender ?? (m0.senderName as string) ?? (m0.sender as string) ??
+        (m0.senderId as string) ?? undefined
+      // Extract the actual message content
+      messageText = (m0.text as string) ?? (m0.content as string) ?? raw
     }
 
     // Single message under "message" key
     if (data.message && typeof data.message === "object") {
       const m = data.message as Record<string, unknown>
-      threadId =
-        threadId ??
-        (m.threadId as string) ??
-        (m.thread_id as string) ??
-        undefined
-      sender =
-        sender ??
-        (m.senderName as string) ??
-        (m.sender as string) ??
-        (m.senderId as string) ??
-        undefined
+      threadId = threadId ?? (m.threadId as string) ?? (m.thread_id as string) ?? undefined
+      sender = sender ?? (m.senderName as string) ?? (m.sender as string) ??
+        (m.senderId as string) ?? undefined
+      messageText = (m.text as string) ?? (m.content as string) ?? raw
+    }
+
+    // Flat message (text/content at top level)
+    if (!messageText || messageText === raw) {
+      messageText = (data.text as string) ?? (data.content as string) ?? raw
     }
   } catch {
-    // text is not JSON — use raw text
+    // Not JSON — use raw as message text
   }
 
-  return { threadId, sender, text }
+  return { threadId, sender, text: messageText }
 }

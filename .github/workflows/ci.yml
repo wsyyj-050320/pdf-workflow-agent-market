@@ -4,100 +4,71 @@ on:
   push:
     branches: [main]
   pull_request:
-
-permissions:
-  pull-requests: write
+    branches: [main]
 
 jobs:
-  # ── TypeScript SDK ──
-  core-test:
-    name: TypeScript tests + coverage
+  typescript-sdk:
+    name: TypeScript SDK
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./typescript
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
       - uses: actions/setup-node@v4
         with:
-          node-version: lts/*
-      - run: pnpm install
-      - run: cd packages/solana-pay/core && npx vitest run --coverage
-      - name: Upload TS coverage
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ts-coverage
-          path: typescript/packages/solana-pay/core/coverage/coverage-summary.json
-          if-no-files-found: ignore
+          node-version: 20
+          cache: npm
+          cache-dependency-path: sdk/agent-core-ts/package-lock.json
+      - run: cd sdk/agent-core-ts && npm install
+      - run: cd sdk/agent-core-ts && npm run typecheck
+      - run: cd sdk/agent-core-ts && npm test
 
-  # ── Rust lint ──
-  rust-check:
-    name: Rust lint
+  typescript-api:
+    name: TypeScript API (api-ts)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./rust
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
       - uses: actions/setup-node@v4
         with:
-          node-version: lts/*
-      - name: Build PDB frontend
-        run: cd ../pdb && pnpm install --frozen-lockfile && pnpm build
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: rust
-      - run: cargo fmt --check
-      - run: cargo clippy --workspace --all-targets -- -D warnings
+          node-version: 20
+          cache: npm
+          cache-dependency-path: api-ts/package-lock.json
+      - run: cd api-ts && npm install
+      - run: cd api-ts && npm run typecheck
+      - run: cd api-ts && npm test
 
-  # ── Rust tests + coverage ──
-  rust-test:
-    name: Rust tests + coverage
+  web:
+    name: Web (Next.js)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./rust
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
       - uses: actions/setup-node@v4
         with:
-          node-version: lts/*
-      - name: Build PDB frontend
-        run: cd ../pdb && pnpm install --frozen-lockfile && pnpm build
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: llvm-tools-preview
-      - uses: taiki-e/install-action@cargo-llvm-cov
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: rust
-      - name: Run tests with coverage
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: cd web && npm install
+      - run: cd web && npm run typecheck
+      - run: cd web && npm run build
         env:
-          SURFPOOL_REPORT: "1"
-        run: cargo llvm-cov --workspace --features server --exclude pay --ignore-filename-regex 'crates/cli/' --json --output-path coverage.json
-      - name: Upload Rust coverage
-        if: always()
-        uses: actions/upload-artifact@v4
+          NEXT_PUBLIC_CORAL_SERVER: http://localhost:8081
+          NEXT_PUBLIC_HELIUS_RPC: https://devnet.helius-rpc.com/?api-key=test
+
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: [typescript-api, web]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          name: rust-coverage
-          path: rust/coverage.json
-      - name: Upload Rust surfpool report data
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: surfpool-reports-rust
-          path: rust/target/surfpool-reports/
-          if-no-files-found: ignore
+          node-version: 20
+      - name: Install e2e deps
+        run: cd e2e && npm install
+      - name: Install Playwright browsers
+        run: cd e2e && npx playwright install --with-deps chromium
+      - name: Build web
+        run: cd web && npm install && npm run build
+        env:
+          NEXT_PUBLIC_CORAL_SERVER: http://localhost:8081
+          NEXT_PUBLIC_HELIUS_RPC: https://devnet.helius-rpc.com/?api-key=test
+      - name: Run E2E tests
+        run: cd e2e && npm test

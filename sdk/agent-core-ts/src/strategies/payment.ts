@@ -1,11 +1,19 @@
 import { BaseStrategy, MutableAgentState, untilAborted } from '../strategy.js'
 import type { PaymentChallenge } from '../types.js'
 
+/** Configuration for `PaymentStrategy`. */
 export interface PaymentConfig {
+  /** HTTP endpoint to poll. Expected to return 402 with a payment challenge. */
   endpoint: string
+  /** Maximum lamports the agent is authorised to spend per session. */
   budgetLamports: number
 }
 
+/**
+ * Parse the `WWW-Authenticate` header of an HTTP 402 response.
+ * Supports both `mpp=<base64>` and `x402=<base64>` challenge formats.
+ * @returns Parsed `PaymentChallenge`, or `null` if the header is absent or malformed.
+ */
 function parse402Headers(headers: Headers): PaymentChallenge | null {
   const auth = headers.get('www-authenticate') ?? ''
   if (!auth) return null
@@ -20,11 +28,19 @@ function parse402Headers(headers: Headers): PaymentChallenge | null {
   }
 }
 
+/**
+ * Polls an HTTP endpoint that requires micropayment (HTTP 402) and records the
+ * payment challenge details. Breaks when the endpoint returns 200.
+ *
+ * This strategy detects and logs challenges — actual wallet signing is done by the
+ * buyer-agent layer (see `coral-agents/buyer-agent/src/wallet.ts`).
+ */
 export class PaymentStrategy extends BaseStrategy {
   readonly name = 'solana-pay-payment'
   private config: PaymentConfig
 
   constructor(config: PaymentConfig) {
+    super()
     this.config = config
   }
 
@@ -45,7 +61,8 @@ export class PaymentStrategy extends BaseStrategy {
       } catch (e) {
         if (!signal.aborted) state.recordAction('payment-error', String(e))
       }
-      await new Promise(r => setTimeout(r, 10_000))
+      // Respect the abort signal during the inter-poll sleep.
+      await Promise.race([new Promise(r => setTimeout(r, 10_000)), untilAborted(signal)])
     }
   }
 }

@@ -3,8 +3,7 @@
 #
 # Coral launches agents as sibling Docker containers, so it needs the host
 # Docker socket. It also reads a local agent registry from the mounted
-# ../agent_demo/coral-agents directory (each agent = a folder with
-# coral-agent.toml).
+# ../../coral-agents directory (each agent = a folder with coral-agent.toml).
 services:
   coral-server:
     image: ghcr.io/coral-protocol/coral-server:latest
@@ -16,5 +15,5 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./config.toml:/config/config.toml:ro
-      - ../agent_demo/coral-agents:/agents:ro
+      - ../../coral-agents:/agents:ro
     restart: unless-stopped

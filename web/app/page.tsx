@@ -41,7 +41,7 @@ export default function MarketplacePage() {
         </div>
 
         {/* Listings */}
-        <div className="space-y-3">
+        <div className="space-y-3" data-testid="agent-listings">
           {LISTINGS.map(agent => (
             <AgentCard key={agent.id} agent={agent} />
           ))}
@@ -61,7 +61,7 @@ export default function MarketplacePage() {
             </li>
             <li className="flex gap-3">
               <span className="text-white font-semibold shrink-0">3.</span>
-              <span>A Rust agent detects the payment and delivers live weather data — temperature, humidity, wind, and condition.</span>
+              <span>A Node.js agent detects the payment and delivers live weather data — temperature, humidity, wind, and condition.</span>
             </li>
           </ol>
         </div>

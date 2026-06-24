@@ -16,7 +16,7 @@ The infrastructure is mostly there. `coral_mcp.rs` has a complete MCP client. `c
 
 #### 1. Add `handle_message` to the `Strategy` trait
 
-**File:** `agent_demo/agent-core/src/strategy.rs`
+**File:** `runtime/agent-core/src/strategy.rs`
 
 The trait only has `run` (a polling loop). There is no way to feed an inbound Coral mention to a running strategy and get a typed response back. Add a default method:
 
@@ -94,7 +94,7 @@ async fn handle_message(&self, text: &str, state: Arc<Mutex<AgentState>>) -> Str
 
 #### 2. Expose `Arc<Agent>` from `AgentManager`
 
-**File:** `agent_demo/agent-core/src/manager.rs`
+**File:** `runtime/agent-core/src/manager.rs`
 
 The existing `get_agent_state` returns a snapshot clone — not the live agent. The `mcp_join` handler needs the live agent to call `handle_message` on its strategy. Add:
 
@@ -118,7 +118,7 @@ pub fn get_strategy(&self) -> Arc<dyn Strategy> {
 
 #### 3. Wire mention dispatch in `mcp_join`
 
-**File:** `coral-server/src/api/coralos.rs`, lines 144–159
+**File:** `api/src/api/coralos.rs`, lines 144–159
 
 Replace the hardcoded acknowledgement with a real dispatch:
 
@@ -163,7 +163,7 @@ async move {
 
 #### 1. Add missing commands to `transport.ts`
 
-**File:** `agent_demo/src-ui/src/transport.ts`
+**File:** `web/app/transport.ts`
 
 Add to the CoralOS section of `httpDispatch`:
 
@@ -182,7 +182,7 @@ case 'coralos_mcp_status':
 
 #### 2. Add MCP join UI to the CoralOS tab
 
-**File:** `agent_demo/src-ui/src/App.tsx`
+**File:** `web/app/App.tsx`
 
 Add state at the top of `App()`:
 
@@ -263,7 +263,7 @@ Add to the CoralOS tab JSX (below the session list card):
 
 #### 3. Style `coral-mention` actions
 
-**File:** `agent_demo/src-ui/src/App.tsx`, `actionBadgeClass` function (line ~611)
+**File:** `web/app/App.tsx`, `actionBadgeClass` function (line ~611)
 
 ```typescript
 const known: Record<string, string> = {
@@ -286,7 +286,7 @@ const known: Record<string, string> = {
 
 #### 4. Fix the CoralOS URL default
 
-**File:** `agent_demo/src-ui/src/App.tsx`, line ~138
+**File:** `web/app/App.tsx`, line ~138
 
 ```typescript
 // Before:
@@ -431,4 +431,4 @@ The Rust agent is the only participant that can touch Solana. Everything else ta
    send {"recipient":"...","amount":0.01} mention → verify URL returned in thread
 ```
 
-Total: 7 files touched, no breaking changes to existing Tauri commands or REST routes.
+Total: 7 files touched, no breaking changes to existing REST routes.

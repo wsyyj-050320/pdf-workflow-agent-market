@@ -19,3 +19,7 @@ export { WeatherStrategy } from './strategies/weather.js'
 // CoralOS MCP client
 export { CoralMcpAgent } from './coral_mcp.js'
 export type { CoralMention, CoralMcpConfig } from './coral_mcp.js'
+
+// Standalone CoralOS agent entrypoint (for Docker containers)
+export { startCoralAgent } from './coral_mcp_server.js'
+export type { CoralAgentConfig, CoralAgentContext } from './coral_mcp_server.js'

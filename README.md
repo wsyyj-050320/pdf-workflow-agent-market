@@ -1,195 +1,163 @@
-# pay — Agent Economy Demo
+# pay — Solana Agent Economy Starter
 
-**A Solana-native multi-agent payment system. Agents request, pay, and settle on-chain automatically — no human in the loop.**
+Agents request, pay, and settle on-chain automatically — no human in the loop.
 
-One agent sells data. Another buys it. Payment is a Solana Pay URL, settlement is on-chain in under a second, and confirmation is detected in real time by Helius. No subscriptions, no API keys, no bank accounts.
-
-[Architecture](#architecture) · [Quick Start](#quick-start) · [Monorepo Layout](#monorepo-layout) · [Contributing](#contributing)
+Three ready-to-fork tracks: autonomous agent APIs, agent-to-agent trading, and consumer checkout with Phantom. Every payment is a real on-chain Solana transaction.
 
 ---
 
-## What This Is
-`   A Tauri desktop application backed by a Rust multi-agent runtime. Two demo agents demonstrate autonomous agent-to-agent payments on Solana devnet:
+## Prerequisites
 
-- **Seller agent** — generates a Solana Pay URL, waits for confirmed payment, then delivers the data response.
-- **Buyer agent** — polls the seller's wallet via Helius every 10 seconds; the moment it detects the expected transfer, it closes the loop and triggers data delivery.
+- [Node.js 20+](https://nodejs.org)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (running)
+- [Phantom wallet](https://phantom.app) browser extension — Track 3 only
 
-The frontend shows both agents live — their state, action history, and payment flow — updating in real time.
+---
 
-## The Payment Flow
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  SELLER AGENT                        BUYER AGENT         │
-│                                                         │
-│  solana:7xK...f9                     Watching: 7xK...f9 │
-│    ?amount=0.001                     Polling: every 10s  │
-│    &label=DataFeed                                       │
-│                                                         │
-│  12:01:03 url-generated              12:01:10 poll-tick  │
-│  12:01:03 waiting-for-payment        12:01:20 poll-tick  │
-│                                                         │
-│  [payment sent from any wallet]                          │
-│                                                         │
-│  12:01:38 payment-confirmed          12:01:38 payment-received
-│  12:01:38 delivering-data            sig: 3xK...ab      │
-│  → {"price": 189.42}                 from: 9mZ...11     │
-└─────────────────────────────────────────────────────────┘
-```
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  src-ui (React / Vite / Tailwind / @xyflow/react)        │
-│  — real-time agent panels, workflow DAG, action feeds    │
-└───────────────────┬─────────────────────────────────────┘
-                    │ Tauri IPC (invoke)
-┌───────────────────▼─────────────────────────────────────┐
-│  src-tauri (Rust / Tauri 2)                              │
-│  — IPC command handlers, CoralOS HTTP client             │
-└───────────────────┬─────────────────────────────────────┘
-                    │ Rust crate dependency
-┌───────────────────▼─────────────────────────────────────┐
-│  agent-core (Rust library)                               │
-│  AgentManager · Strategy trait · MessageBus              │
-│  SharedState · WorkflowEngine · AgentRole                │
-│  solana_pay/ · helius.rs · jito.rs                       │
-└───────┬───────────────────────────┬─────────────────────┘
-        │                           │
-┌───────▼────────┐       ┌──────────▼──────────┐
-│  Solana RPC    │       │  Helius REST API     │
-│  (devnet)      │       │  (wallet monitoring) │
-└────────────────┘       └─────────────────────┘
-```
-
-`agent-core` is also exposed as a standalone REST API by `coral-server` (Axum, port 8080), enabling remote access to the same agent runtime without the Tauri layer.
-
-## Coral Server MCP Integration (Real Agent)
-
-In addition to the Rust runtime, `helius-monitor` is fully integrated as a **first-class Coral agent**. Instead of polling an API independently, the agent is orchestrated by the official Java-based Coral Server running in a Docker container.
-
-- **MCP Protocol:** The agent connects to Coral via the Model Context Protocol (MCP) using a streamable-HTTP transport.
-- **Docker Runtime:** Coral launches the agent inside its own isolated Docker container and injects environment variables based on the active session's graph.
-- **Dynamic Capabilities:** The agent discovers tools dynamically (e.g., `coral_wait_for_mention`, `coral_send_message`) and uses long-polling to wake up only when it is explicitly addressed by another agent in the session.
-- **Puppet API:** We use an idle test-harness agent (`user-proxy`) to securely inject mentions into the session to trigger agent workflows.
-
-For a deep dive into the registry setup, session configuration, and exact MCP flow, read the [Deep Architecture Guide](docs/coral_agent_architecture.md).
-
-## Payment Standards
-
-| Standard | Layer | Role in this project |
-|----------|-------|---------------------|
-| **Solana Pay** | Application | `solana:` URL encoding for seller payment requests |
-| **MPP** | Transport | HTTP 402 + `www-authenticate` / `payment-receipt` headers |
-| **x402** | Transport | HTTP 402 + `X-PAYMENT` header with facilitator verify/settle |
-| **Helius** | Data | Real-time wallet monitoring and transaction parsing on devnet |
-| **Jito** | Execution | MEV-protected bundle submission for payment transactions |
-
-## Quick Start
-
-### Four entry points — pick your language
-
-**Web frontend (no Tauri required — fastest start)**
-```sh
-# Terminal 1: start the backend
-cd coral-server && cargo run
-
-# Terminal 2: start the UI
-cd agent_demo/src-ui && npm install && npm run dev
-# → http://localhost:5173
-```
-
-**Tauri desktop app**
-```sh
-cd agent_demo/src-ui && npm install
-cd ../src-tauri && cargo tauri dev
-```
-
-**TypeScript agent runtime**
-```sh
-cd typescript_sdk/agent-core-ts && npm install
-# write your strategy, run with ts-node or compile
-```
-
-**Rust agent runtime**
-```sh
-cd agent_demo && cargo build
-# impl Strategy for MyStrategy — full Rust
-```
-
-**Python / CoralOS agent**
-```sh
-docker run -p 8001:8001 coralprotocol/coral-server:latest
-# write coral_agent.py — pure Python, no Rust needed
-```
-
-### Environment setup
+## Quick start
 
 ```sh
-cp .env.example .env
-# fill in VITE_HELIUS_API_KEY — get a free key at helius.dev
+git clone https://github.com/trilltino/pay
+cd pay
+cd scripts && npm install && cd ..
+node scripts/setup.js
 ```
 
-See [docs/provider-keys.md](docs/provider-keys.md) for step-by-step key setup.
-
-### Build
+The setup script generates two devnet wallets and writes your `.env`. It will print two wallet addresses — **fund both at [faucet.solana.com](https://faucet.solana.com)** (1 SOL each), then pick a track and run:
 
 ```sh
-# Full Rust workspace build (from agent_demo/)
-cd agent_demo && cargo build
-
-# Release binary (coral-server)
-cd coral-server && cargo build --release
+cd examples/track-1-pay-per-call
+docker compose up
 ```
 
-## Monorepo Layout
+Docker pulls the pre-built images from `ghcr.io/trilltino` automatically — no build step needed.
+
+Optional keys for better performance (not required to run):
+
+```sh
+JUPITER_API_KEY=   # jup.ag/developers — higher rate limits
+HELIUS_API_KEY=    # helius.dev — faster RPC
+```
+
+---
+
+## Track 1 — Pay-Per-Call API
+
+An autonomous buyer agent continuously pays a seller agent for Jupiter DEX swap quotes. No human involved — both agents run in Docker, talk over CoralOS, and settle on Solana devnet.
+
+```
+Buyer agent → "request SOL to USDC quote"
+Seller agent → Solana Pay URL
+Buyer agent → pays 0.0001 SOL on-chain
+Seller agent → verifies tx → delivers Jupiter quote
+```
+
+**Run it:**
+
+```sh
+cd examples/track-1-pay-per-call
+docker compose up
+```
+
+**Open:** [http://localhost:3000/track-1](http://localhost:3000/track-1)
+
+You'll see a live feed of requests, on-chain payment signatures, and delivered quotes.
+
+**Fork it** — change what the seller sells in one file:
+
+```typescript
+// coral-agents/seller-agent/src/service.ts
+export async function deliverService(request: string) {
+  // ← your service here
+}
+```
+
+---
+
+## Track 2 — Agent-to-Agent Trading
+
+Same as Track 1 but the buyer loops every 30 seconds, building up a trade history. Useful for demonstrating recurring autonomous payments or a simple data subscription model.
+
+**Run it:**
+
+```sh
+cd examples/track-2-agent-trading
+docker compose up
+```
+
+**Open:** [http://localhost:3000/track-2](http://localhost:3000/track-2)
+
+Side-by-side live logs for seller and buyer. Every payment links to Solana Explorer.
+
+**Fork it** — same `service.ts` entrypoint as Track 1. Change `BUYER_REQUEST` in `coral-agents/buyer-agent/src/goal.ts` to change what the buyer asks for.
+
+---
+
+## Track 3 — Consumer Checkout
+
+A human connects Phantom, picks a topic, and clicks Pay. The payment settles on-chain and the result is delivered instantly — no backend login, no API key, just a wallet.
+
+**Run it:**
+
+```sh
+cd examples/track-3-consumer-checkout
+docker compose up
+```
+
+**Open:** [http://localhost:3000/track-3](http://localhost:3000/track-3)
+
+Connect Phantom (set to Devnet), pick a topic, click Pay 0.00005 SOL. You'll see the tx confirmed and the result appear.
+
+**Fork it** — same `service.ts` as above. Change the `TOPICS` array in `web/app/track-3/page.tsx` to match your service.
+
+---
+
+## Repo Layout
 
 | Directory | Purpose |
 |-----------|---------|
-| `agent_demo/` | Tauri workspace — Rust backend + React frontend |
-| `agent_demo/agent-core/` | Core Rust library: agent lifecycle, messaging, workflows, Solana Pay, Helius |
-| `agent_demo/src-tauri/` | Tauri backend: IPC commands, CoralOS HTTP client |
-| `agent_demo/src-ui/` | React frontend: Vite + Tailwind + @xyflow/react |
-| `coral-server/` | Axum REST API wrapping agent-core (port 8080) |
-| `typescript_sdk/agent-core-ts/` | TypeScript agent runtime — identical concepts to agent-core |
-| `typescript_sdk/sdk/` | TypeScript HTTP client for coral-server |
-| `ref/` | Read-only reference implementations — do not modify |
+| `coral-agents/seller-agent/` | Sells data for SOL — fork `src/service.ts` |
+| `coral-agents/buyer-agent/` | Pays autonomously — fork `src/goal.ts` |
+| `api-ts/` | Express REST API on port 8081 |
+| `sdk/agent-core-ts/` | Agent runtime: CoralOS MCP, Solana Pay, messaging |
+| `web/` | Next.js frontend — `/track-1`, `/track-2`, `/track-3` |
+| `examples/` | One `docker-compose.yml` per track |
+| `docs/` | CoralOS config and design docs |
 
-## Key Technical Constraints
+---
 
-- **Tauri IPC boundary** — all Rust → UI types must derive `Serialize + Deserialize`.
-- **Strategy trait** — all `Strategy` implementations must be `Send + Sync`; use `Arc<Mutex<_>>` for interior state.
-- **CoralOS base URL** — empty by default; set at runtime via `set_coralos_url` before any CoralOS API calls.
-- **Helius** — wallet monitoring and transaction parsing run against Solana devnet via the Helius REST API; configure your API key before running payment strategies.
-
-## coral-server Endpoints
+## How the payment cycle works
 
 ```
-GET  /health
-GET  /api/v1/agents        — list agents
-POST /api/v1/agents        — create agent
-GET  /api/v1/workflows     — list workflows
-POST /api/v1/workflows     — trigger workflow
-POST /api/v1/messages      — publish message to bus
-GET  /api/v1/state         — read shared state
-PUT  /api/v1/state         — write shared state
+Buyer sends "request <query>" → Seller
+Seller replies with solana:<wallet>?amount=0.0001&memo=pay-<id>
+Buyer signs + broadcasts the transaction on devnet
+Buyer sends "paid <sig> memo=pay-<id>" → Seller
+Seller calls connection.getTransaction(sig) — verifies amount + recipient
+Seller delivers the data
 ```
 
-## Contributing
+All verification happens on-chain. No off-chain trust required.
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full contributor guide.
+---
+
+## Development (without Docker)
 
 ```sh
-cd agent_demo
+# API server
+cd api-ts && npm install && npm run dev    # :8081
 
-cargo build                                              # build workspace
-cargo test                                               # all tests
-cargo test -p agent-core                                 # library tests only
-cargo clippy --workspace --all-targets -- -D warnings   # lint
-cargo fmt                                                # format
+# Web
+cd web && npm install && npm run dev       # :3000
+
+# Type check everything
+cd sdk/agent-core-ts && npm run typecheck
+cd api-ts && npm run typecheck
+cd web && npm run typecheck
 ```
+
+---
 
 ## License
 
-MIT — see [LICENSE](./LICENSE).
+MIT

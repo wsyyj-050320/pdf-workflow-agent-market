@@ -1,0 +1,21 @@
+edition = 3
+
+[agent]
+name = "buyer-agent"
+version = "0.1.0"
+description = "LLM-driven autonomous buyer agent. Requests data from seller-agent, pays in SOL via Solana Pay, receives and summarises results using Claude."
+summary = "Autonomous TypeScript agent that buys data with SOL and analyses it with Claude."
+readme = "Autonomous loop: sends 'request <goal>' to seller-agent, parses the Solana Pay URL, pays from its devnet wallet, sends payment proof, waits for delivery, and optionally summarises the result with Claude Haiku."
+
+[agent.license]
+type = "spdx"
+expression = "MIT"
+
+[options]
+ANTHROPIC_API_KEY = { type = "string", default = "", description = "Anthropic API key for Claude analysis (optional — skips LLM if unset)" }
+BUYER_KEYPAIR_B58 = { type = "string", description = "Base58-encoded devnet keypair — generate: solana-keygen new --no-bip39-passphrase" }
+BUYER_MAX_SOL = { type = "f64", default = 0.001, description = "Max SOL to spend per request" }
+SOLANA_RPC_URL = { type = "string", default = "", description = "Solana RPC URL" }
+
+[runtimes.docker]
+image = "buyer-agent:0.1.0"

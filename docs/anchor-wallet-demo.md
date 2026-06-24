@@ -199,7 +199,7 @@ pub enum EscrowError {
 
 ---
 
-### 2. New strategy — `agent_demo/agent-core/src/solana_pay/anchor_escrow.rs`
+### 2. New strategy — `runtime/agent-core/src/solana_pay/anchor_escrow.rs`
 
 The seller agent uses this strategy instead of `SolanaPayStrategy`. It:
 1. Calls `create_escrow` instruction when started
@@ -239,7 +239,7 @@ impl Strategy for AnchorEscrowStrategy {
 
 ---
 
-### 3. TypeScript strategy — `typescript_sdk/agent-core-ts/src/strategies/anchor_escrow.ts`
+### 3. TypeScript strategy — `sdk/agent-core-ts/src/strategies/anchor_escrow.ts`
 
 ```typescript
 import { Program, AnchorProvider, web3 } from "@coral-xyz/anchor"
@@ -270,7 +270,7 @@ export class AnchorEscrowBuyerStrategy implements Strategy {
 
 ---
 
-### 4. React wallet setup — `agent_demo/src-ui/src/WalletProvider.tsx`
+### 4. React wallet setup — `web/app/WalletProvider.tsx`
 
 ```typescript
 import {
@@ -306,7 +306,7 @@ Wrap `<App />` in `main.tsx`:
 
 ---
 
-### 5. Anchor demo tab — `agent_demo/src-ui/src/AnchorDemo.tsx`
+### 5. Anchor demo tab — `web/app/AnchorDemo.tsx`
 
 ```typescript
 import { useWallet, useConnection } from "@solana/wallet-adapter-react"
@@ -398,7 +398,7 @@ export function AnchorDemo() {
 ## New npm packages needed
 
 ```sh
-cd agent_demo/src-ui
+cd web
 npm install \
   @solana/wallet-adapter-react \
   @solana/wallet-adapter-react-ui \
@@ -408,7 +408,7 @@ npm install \
 ```
 
 ```sh
-cd typescript_sdk/agent-core-ts
+cd sdk/agent-core-ts
 npm install @coral-xyz/anchor
 ```
 
@@ -416,12 +416,11 @@ npm install @coral-xyz/anchor
 
 ## New Cargo workspace member
 
-Add to `agent_demo/Cargo.toml`:
+Add to `runtime/Cargo.toml`:
 ```toml
 [workspace]
 members = [
   "agent-core",
-  "src-tauri",
   "../programs/escrow",   # ← new Anchor program
 ]
 ```
@@ -489,14 +488,14 @@ programs/
     Cargo.toml
     src/lib.rs                            ← Anchor program (deposit, claim, refund)
 
-agent_demo/agent-core/src/solana_pay/
+runtime/agent-core/src/solana_pay/
   anchor_escrow.rs                        ← Rust AnchorEscrowStrategy
 
-agent_demo/src-ui/src/
+web/app/
   WalletProvider.tsx                      ← Solana wallet adapter setup
   AnchorDemo.tsx                          ← UI tab: connect wallet, pay button
 
-typescript_sdk/agent-core-ts/src/strategies/
+sdk/agent-core-ts/src/strategies/
   anchor_escrow.ts                        ← TypeScript AnchorEscrowBuyerStrategy
 ```
 

@@ -1,5 +1,11 @@
 import { BaseStrategy, MutableAgentState, untilAborted } from '../strategy.js'
 
+/**
+ * Default no-op strategy. Records an `"idle-tick"` action every 60 seconds so the
+ * action log proves the agent is alive, but does nothing else.
+ *
+ * Used automatically when `AgentManager.createAgent` is called without a strategy.
+ */
 export class IdleStrategy extends BaseStrategy {
   readonly name = 'idle'
 
