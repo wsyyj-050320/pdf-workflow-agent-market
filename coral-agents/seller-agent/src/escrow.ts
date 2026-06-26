@@ -7,9 +7,12 @@
  *
  * TYPECHECK-ONLY: the on-chain calls require a deployed program + devnet RPC to actually run.
  */
-import * as anchor from '@coral-xyz/anchor'
-import { Program, AnchorProvider } from '@coral-xyz/anchor'
+// @coral-xyz/anchor is CommonJS — a DEFAULT import exposes the whole module.exports (a namespace
+// import misses members the cjs lexer doesn't detect). esModuleInterop makes this typecheck.
+import anchor from '@coral-xyz/anchor'
+import type { Program } from '@coral-xyz/anchor'
 import { Connection, Keypair, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js'
+const { AnchorProvider } = anchor
 
 export const PROGRAM_ID = new PublicKey('R5NWNg9eRLWWQU81Xbzz5Du1k7jTDeeT92Ty6qCeXet')
 
@@ -28,9 +31,9 @@ export async function makeProgram(rpcUrl: string): Promise<Program> {
     new anchor.Wallet(Keypair.generate()),
     { commitment: 'confirmed' },
   )
-  const idl = await Program.fetchIdl(PROGRAM_ID, provider)
+  const idl = await anchor.Program.fetchIdl(PROGRAM_ID, provider)
   if (!idl) throw new Error('escrow IDL not found on-chain — is the program deployed to this cluster?')
-  return new Program(idl, provider)
+  return new anchor.Program(idl, provider)
 }
 
 /** Is a funded escrow present for (buyer, reference) naming `seller`, holding ≥ `minAmountSol`? */
