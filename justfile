@@ -11,10 +11,11 @@ set windows-shell := ["cmd.exe", "/c"]
 default:
     @just --list
 
-# ── one-shot: wallets + build images + start coral ──────────────────────────
+# ── one-shot: wallets + build images + coral + open the dashboard ───────────
 dev: setup build clean up
     @echo Coral is up. FUND the 2 printed wallets at https://faucet.solana.com (GitHub sign-in).
-    @echo Then launch the market:  just market
+    @echo Opening the dashboard - click "Start a market" once the wallets are funded.
+    node scripts/dashboard.js
 
 # generate the devnet wallets (fund them manually at the faucet)
 setup:
@@ -34,13 +35,13 @@ up:
 market:
     cd examples/marketplace && npm install --no-audit --no-fund && npm start
 
-# the visualizer feed server — reads coral's transcript (set SESSION=<id> or pass ?session= in the UI)
+# the visualizer: feed server + UI on :5173, opens the browser (click "Start a market" after funding)
+dashboard:
+    node scripts/dashboard.js
+
+# just the feed server (logs-flow alternative; reads coral's transcript)
 feed:
     cd examples/marketplace/feed && npm install --no-audit --no-fund && npm start
-
-# the visualizer UI on :5173 — run `just feed` in another shell, then open ?session=<the market session id>
-dashboard:
-    cd examples/marketplace/web && npm install --no-audit --no-fund && npm run dev
 
 # readiness check: Docker, Node, wallets funded, coral up
 doctor:

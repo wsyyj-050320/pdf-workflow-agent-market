@@ -1,34 +1,29 @@
 import { test, expect } from '@playwright/test'
-import { fixtureRounds } from './fixtures'
 
-// Mock the feed server so the e2e is deterministic and needs no devnet / LLM key.
-test.beforeEach(async ({ page }) => {
-  await page.route('**/api/feed**', (route) =>
-    route.fulfill({ json: { session: 'demo', rounds: fixtureRounds, updatedAt: new Date().toISOString() } }),
-  )
-})
-
-test('renders the live auction from the feed', async ({ page }) => {
-  await page.goto('/?session=demo')
-
-  // newest round first → round #2 (bidding) above round #1 (settled)
-  const rounds = page.getByTestId('round')
-  await expect(rounds).toHaveCount(2)
+/**
+ * No route mocking — the app polls the REAL feed server, which folds a real recorded coral transcript
+ * (a settled devnet round: cheap wins on price, premium loses, lazy declined coingecko).
+ */
+test('renders the live auction from the real feed pipeline', async ({ page }) => {
+  await page.goto('/?session=fixture')
 
   const settled = page.locator('[data-testid="round"][data-round="1"]')
+  await expect(settled).toBeVisible()
   await expect(settled.getByTestId('status')).toHaveText('settled')
+
+  // two real bids; the cheaper one won; lazy self-selected out
   await expect(settled.getByTestId('bid')).toHaveCount(2)
   await expect(settled.getByTestId('declined')).toHaveText(/seller-lazy/)
-  await expect(settled.getByTestId('reason')).toContainText('verified data worth the premium')
-
-  // the winning bid is highlighted and the release links to the devnet explorer
-  const winner = settled.locator('[data-testid="bid"][data-seller="seller-premium"]')
+  const winner = settled.locator('[data-testid="bid"][data-seller="seller-cheap"]')
   await expect(winner).toHaveClass(/bid-won/)
+
+  // the buyer's reasoning carried into the transcript, and a real devnet release link
+  await expect(settled.getByTestId('reason')).toBeVisible()
   const release = settled.getByTestId('settle').last()
-  await expect(release).toHaveAttribute('href', /explorer\.solana\.com\/tx\/3PMa.*cluster=devnet/)
+  await expect(release).toHaveAttribute('href', /explorer\.solana\.com\/tx\/.+cluster=devnet/)
 })
 
 test('shows the connection indicator', async ({ page }) => {
-  await page.goto('/?session=demo')
+  await page.goto('/?session=fixture')
   await expect(page.getByTestId('conn')).toBeVisible()
 })

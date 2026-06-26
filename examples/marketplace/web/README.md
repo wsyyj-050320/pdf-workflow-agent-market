@@ -12,11 +12,14 @@ buyer and **no wallet** — fully on-thesis.
 ## Run
 
 ```sh
-just market                       # launch a market session — note the printed session id
-just feed                         # in another shell: the feed server on :4000 (proxies coral)
-just dashboard                    # the UI on :5173
-# open http://localhost:5173/?session=<the market session id>   (or paste it in the input)
+just dev          # builds, starts coral, opens the dashboard — then click "Start a market"
+# or, if coral is already up:
+just dashboard    # feed + UI on :5173, opens the browser
 ```
+
+The **Start a market** button asks the feed server (`POST /api/start`) to launch a session and then
+watches it live — fund your wallets first. (Logs-flow alternative: `just market`, then paste the
+printed session id into the input.)
 
 ## How it works
 
@@ -28,12 +31,15 @@ parsers**, so the wire protocol has one source of truth — and serves CORS-enab
 
 ```sh
 cd examples/marketplace/web
-npm test                          # Vitest + Testing Library — RoundCard renders bids/winner/links
-npm run e2e                       # Playwright in a real browser vs a MOCKED feed (fixtures)
+npm test          # Vitest + Testing Library — component rendering (bids/winner/links)
+npm run e2e       # Playwright — the REAL feed server folding a recorded coral transcript → real app
+cd ../feed && npm test   # foldRounds + collectMessages verified against the same real transcript
 ```
 
-Both run fully offline against fixtures — deterministic and CI-friendly. The feed reducer has its own
-unit tests in `../feed` (`npm test` there).
+The e2e is **not** a route mock: Playwright starts the real feed server with a recorded CoralOS
+extended-state response (`feed/tests/coral-session.json`, captured from a settled devnet round), so it
+exercises the actual `collectMessages → foldRounds → HTTP → UI` path. The only thing replaced is coral
+itself — which makes it deterministic and CI-friendly with no devnet or LLM key.
 
 ## Fork points
 

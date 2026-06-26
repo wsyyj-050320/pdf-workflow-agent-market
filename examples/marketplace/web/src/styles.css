@@ -13,11 +13,17 @@ body { margin: 0; background: var(--bg); color: var(--txt); }
 .dot { width: 9px; height: 9px; border-radius: 50%; margin-left: auto; }
 .dot-on { background: var(--won); } .dot-off { background: var(--refund); }
 
-.session-bar { margin: 16px 0; }
+.session-bar { margin: 16px 0; display: flex; gap: 8px; }
 .session-bar input {
-  width: 100%; padding: 8px 10px; background: var(--panel); color: var(--txt);
+  flex: 1; padding: 8px 10px; background: var(--panel); color: var(--txt);
   border: 1px solid var(--line); border-radius: 8px; font: inherit;
 }
+.session-bar button {
+  padding: 8px 14px; background: var(--won); color: #04130a; border: 0; border-radius: 8px;
+  font: inherit; font-weight: 700; cursor: pointer;
+}
+.session-bar button:disabled { opacity: 0.5; cursor: default; }
+.start-err { color: var(--refund); font-size: 13px; margin: 0 0 12px; }
 
 .empty { color: var(--dim); padding: 32px 0; text-align: center; }
 .market { display: flex; flex-direction: column; gap: 12px; }

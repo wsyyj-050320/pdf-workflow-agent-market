@@ -5,9 +5,13 @@ transcript (extended state, behind the dev token), folds it into typed market `R
 CORS-enabled JSON for the React app to poll.
 
 ```
-GET /api/health              → { ok: true }
-GET /api/feed?session=<sid>  → { session, rounds, updatedAt }
+GET  /api/health              → { ok: true }
+GET  /api/feed?session=<sid>  → { session, rounds, updatedAt }
+POST /api/start               → { session }   (launches a market session — the dashboard's button)
 ```
+
+Set `FEED_FIXTURE=<recorded-extended-state.json>` to serve a recorded transcript instead of hitting
+coral — this is how the web e2e exercises the real fold/parse path with no devnet.
 
 `foldRounds` (the fold logic) **reuses `@pay/agent-runtime`'s parsers**, so the market wire protocol
 has one source of truth. It's pure and has its own unit tests.
