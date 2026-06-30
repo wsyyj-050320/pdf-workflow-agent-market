@@ -234,16 +234,28 @@ function App() {
   const [tab, setTab] = useState('oracle')
   const selected = fixtures ? fixtures[idx] : null
 
-  // load the board: ONLY fixtures with verified live 1X2 odds (inlined). If the proxy is offline we
-  // show the clearly-labelled demo board instead — we never mix demo numbers into a live fixture.
+  // load the board: fixtures with verified live odds (inlined). The free World Cup tier's odds are
+  // intermittent and the proxy needs a few seconds to subscribe on a cold start, so we KEEP polling
+  // until live data arrives — showing the labelled sample board meanwhile, then switching to live on
+  // its own. We never mix demo numbers into a live fixture.
   useEffect(() => {
     let alive = true
-    fetch(`${PROXY}/api/board`).then((r) => r.json()).then((d) => {
-      if (!alive) return
-      if (Array.isArray(d) && d.length) { setFixtures(d); setSource('live') }
-      else { setFixtures(DEMO_FIXTURES); setSource('demo') }
-    }).catch(() => { if (alive) { setFixtures(DEMO_FIXTURES); setSource('demo') } })
-    return () => { alive = false }
+    let timer = null
+    let tries = 0
+    const load = () => {
+      fetch(`${PROXY}/api/board`).then((r) => r.json()).then((d) => {
+        if (!alive) return
+        if (Array.isArray(d) && d.length) { setFixtures(d); setSource('live'); setIdx(0); return }
+        throw new Error('no live fixtures yet')
+      }).catch(() => {
+        if (!alive) return
+        setFixtures((f) => f ?? DEMO_FIXTURES)   // keep the board full while we wait
+        setSource((s) => (s === 'live' ? s : 'demo'))
+        if (tries++ < 30) timer = setTimeout(load, 5000) // live odds can return at any time
+      })
+    }
+    load()
+    return () => { alive = false; if (timer) clearTimeout(timer) }
   }, [])
 
   // odds come inlined on live fixtures (from /api/board); demo fixtures use the baked-in board.
@@ -293,7 +305,7 @@ function App() {
   return html`
     <header class="hero">
       <span class=${'kicker' + (source === 'demo' ? ' demo' : '')}>
-        <span class="dot"></span>${source === 'demo' ? 'demo data · proxy offline' : 'live · devnet · free World Cup tier'}
+        <span class="dot"></span>${source === 'demo' ? 'sample fixtures · live odds quiet' : 'live · devnet · free World Cup tier'}
       </span>
       <h1><span class="trophy">🏆</span> World Cup Oracle</h1>
       <p class="tagline">Verified TxODDS football data — fetched on Solana devnet, turned into a value call by an agent, and settled in SOL.</p>
@@ -340,8 +352,12 @@ function App() {
       </div>
     </main>
     <footer class="foot">
-      <p class="pillars"><b>CoralOS</b> coordinates · the <b>escrow</b> settles · the agent sells the <b>call</b>.</p>
-      <p>${source === 'live' ? `live data via ${PROXY}` : 'showing demo data — start the proxy (npm run proxy) for live TxODDS fixtures'}</p>
+      <p class="pillars">Verified <b>TxODDS</b> data · the agent's <b>LLM call</b> · settled by <b>Solana escrow</b>.</p>
+      <p>${source === 'live'
+        ? `live · devnet · ${fixtures.length} fixture${fixtures.length === 1 ? '' : 's'} with verified odds`
+        : source === 'demo'
+          ? 'live World Cup odds are quiet right now — showing sample fixtures; the board switches to live automatically when they return'
+          : 'connecting to the live proxy…'}</p>
     </footer>`}`
 }
 

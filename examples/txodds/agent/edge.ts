@@ -28,12 +28,13 @@ export interface Edge {
 type Llm = (opts: CompleteOpts) => Promise<string>
 type Rec = Record<string, unknown>
 
-/** Resolve the 1X2 de-margined market + the matchup from the two snapshots. */
+/** Resolve the best de-margined market (1X2 preferred, else any with a finite price) + the matchup. */
 function shape(input: EdgeInput) {
   const fixtureId = String(input.fixtureId)
-  const m = Array.isArray(input.odds)
-    ? (input.odds as Rec[]).find((x) => String(x.SuperOddsType ?? '').includes('1X2'))
-    : undefined
+  const arr = Array.isArray(input.odds) ? (input.odds as Rec[]) : []
+  const finite = (x: Rec) =>
+    Array.isArray(x.PriceNames) && (x.PriceNames as unknown[]).some((_, i) => Number.isFinite(Number((x.Pct as unknown[])?.[i])))
+  const m = arr.find((x) => String(x.SuperOddsType ?? '').includes('1X2') && finite(x)) ?? arr.find(finite)
   const market = m ? { names: m.PriceNames, pct: m.Pct } : undefined
   const fx = Array.isArray(input.fixtures)
     ? (input.fixtures as Rec[]).find((f) => String(f.FixtureId) === fixtureId)

@@ -105,22 +105,27 @@ async function txGet(path: string): Promise<unknown> {
   return res.data
 }
 
-// A fixture is board-worthy only if it carries a de-margined 1X2 market with at least one real
-// (finite) price — the live feed is full of over/under and Asian-handicap rows priced "NA" that we
-// must NOT surface as if they were odds. This is the single source of truth for "has real odds".
-const usable1x2 = (m: any): boolean =>
-  String(m?.SuperOddsType ?? '').includes('1X2') &&
+// A market is real if it has at least one finite price (the live feed is full of rows priced "NA" we
+// must NOT surface). A fixture is board-worthy if it has ANY such market — the free World Cup tier's
+// 1X2 odds are intermittent, but over/under + Asian-handicap markets are usually present, and those
+// are verified de-margined odds too. 1X2 fixtures are still preferred (sorted first) when available.
+const hasFinitePrice = (m: any): boolean =>
   Array.isArray(m?.PriceNames) &&
   m.PriceNames.some((_: unknown, i: number) => Number.isFinite(Number((m.Pct || [])[i])))
+const has1x2 = (odds: any[]): boolean =>
+  odds.some((m) => String(m?.SuperOddsType ?? '').includes('1X2') && hasFinitePrice(m))
 
 /**
- * The fixtures to actually show: only those with verified live 1X2 odds, with the odds inlined so the
- * UI never has to guess or fall back to demo numbers for a live game. Cached briefly + fetched with
- * bounded concurrency so the board loads fast without hammering the upstream.
+ * The fixtures to actually show: those with any verified live market, odds inlined so the UI never has
+ * to guess or fall back to demo numbers for a live game. 1X2 fixtures sort first. Cached briefly +
+ * fetched with bounded concurrency so the board loads fast without hammering the upstream.
  */
-let boardCache: { at: number; data: any[] | null } = { at: 0, data: null }
+// Cache holds the last NON-EMPTY board. We never cache an empty scan (the free tier flickers in and
+// out of having priced markets); instead, when a scan comes back empty we keep serving the last good
+// board for a few minutes so the UI stays live through the gaps.
+let boardCache: { at: number; data: any[] } = { at: 0, data: [] }
 async function board(): Promise<any[]> {
-  if (boardCache.data && Date.now() - boardCache.at < 30_000) return boardCache.data
+  if (boardCache.data.length && Date.now() - boardCache.at < 30_000) return boardCache.data // fresh + good
   const fixtures = await txGet('/api/fixtures/snapshot')
   const list = ((Array.isArray(fixtures) ? fixtures : []) as any[]).slice(0, 80)
   const results: (any | null)[] = new Array(list.length).fill(null)
@@ -131,14 +136,16 @@ async function board(): Promise<any[]> {
       const f = list[idx]
       try {
         const odds = await txGet(`/api/odds/snapshot/${f.FixtureId}`)
-        if (Array.isArray(odds) && (odds as any[]).some(usable1x2)) results[idx] = { ...f, odds }
+        if (Array.isArray(odds) && (odds as any[]).some(hasFinitePrice)) results[idx] = { ...f, odds }
       } catch { /* skip this fixture on an upstream error */ }
     }
   }
   await Promise.all(Array.from({ length: 6 }, () => worker()))
-  const data = results.filter(Boolean) as any[]
-  boardCache = { at: Date.now(), data }
-  return data
+  const data = (results.filter(Boolean) as any[])
+    .sort((a, b) => Number(has1x2(b.odds)) - Number(has1x2(a.odds))) // 1X2 fixtures first
+  if (data.length) { boardCache = { at: Date.now(), data }; return data } // got a live board — cache it
+  if (boardCache.data.length && Date.now() - boardCache.at < 300_000) return boardCache.data // flicker — keep last good
+  return data // genuinely nothing priced right now
 }
 
 /**
