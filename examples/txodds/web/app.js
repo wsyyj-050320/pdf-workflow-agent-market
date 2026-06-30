@@ -226,6 +226,12 @@ function SettleResult({ r }) {
         <a href=${addrLink(r.seller)} target="_blank" rel="noreferrer">${shortAddr(r.seller)}</a>
         ${r.selfPay && html`<span class="settled-note">self-pay — set a distinct SELLER_WALLET to split the parties</span>`}
       </div>
+      ${r.order?.favourite && html`
+        <div class="settled-line bind">
+          <span class="bind-tag">bound</span> this payment references
+          <b>${r.order.favourite} @ ${r.order.fairOdds}</b>${r.order.matchup ? ` · ${r.order.matchup}` : ''}
+          <span class="bind-ref">ref ${shortAddr(r.reference)} = sha256(${r.order.preimage})</span>
+        </div>`}
       <div class="settled-line links">
         <a href=${r.deposit.explorer} target="_blank" rel="noreferrer">deposit ↗</a> ·
         <a href=${r.release.explorer} target="_blank" rel="noreferrer">release ↗</a> ·

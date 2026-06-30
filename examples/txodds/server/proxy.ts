@@ -13,6 +13,7 @@
  */
 import http from 'node:http'
 import fs from 'node:fs'
+import { createHash } from 'node:crypto'
 import axios from 'axios'
 import * as anchor from '@coral-xyz/anchor'
 import { PublicKey, SystemProgram, Keypair, Connection } from '@solana/web3.js'
@@ -24,7 +25,7 @@ import nacl from 'tweetnacl'
 import bs58 from 'bs58'
 import { fileURLToPath } from 'node:url'
 import { assertDevnet } from '@pay/agent-runtime'
-import { analyzeEdge } from '../agent/edge.js'
+import { analyzeEdge, fairLine } from '../agent/edge.js'
 import { makeProgram, deposit, release, escrowPda } from '../agent/escrow.js'
 
 // fileURLToPath (not .pathname) so the repo-root .env resolves on macOS/Linux too, not just Windows.
@@ -151,22 +152,43 @@ async function board(): Promise<any[]> {
   return data // genuinely nothing priced right now
 }
 
+/** The verified fair favourite for a board fixture (deterministic — no LLM), for the order commitment. */
+function favouriteOf(fx: any): { label: string; pct: number; fairOdds: number } | undefined {
+  const odds = (fx?.odds ?? []) as any[]
+  const m = odds.find((x) => String(x?.SuperOddsType ?? '').includes('1X2') && hasFinitePrice(x)) ?? odds.find(hasFinitePrice)
+  if (!m) return undefined
+  const { favourite } = fairLine({ names: m.PriceNames, pct: m.Pct }, { home: fx.Participant1, away: fx.Participant2 })
+  return favourite ? { label: favourite.label, pct: favourite.pct, fairOdds: favourite.fairOdds } : undefined
+}
+
 /**
- * Run a real devnet escrow deposit→release so the demo can link the settlement on-chain. The seller is
- * a distinct party (`SELLER_WALLET` / `WALLET`, set by setup.js); if neither is set it self-pays the
- * buyer so a one-wallet demo still works (`selfPay:true` is surfaced so the UI can flag it). Returns
- * {ok:false,error} on any failure so the UI can fall back gracefully.
+ * Run a real devnet escrow deposit→release so the demo can link the settlement on-chain. The escrow
+ * `reference` is BOUND to the order: it's `sha256("txodds:<fixtureId>:<favourite>@<fairOdds>:<nonce>")`,
+ * so the on-chain PDA provably corresponds to exactly the read that was bought (anyone with the returned
+ * `order.preimage` can recompute it). The nonce keeps each settle's PDA unique. The seller is a distinct
+ * party (`SELLER_WALLET`/`WALLET`); if unset it self-pays (`selfPay:true`). Returns {ok:false,error} on
+ * any failure so the UI can fall back gracefully.
  */
-async function settle(amountSol: number): Promise<unknown> {
+async function settle(amountSol: number, fixtureId: string): Promise<unknown> {
   try {
     const buyer = buyerKeypair()
     const sellerEnv = process.env.SELLER_WALLET || process.env.WALLET
     const seller = new PublicKey(sellerEnv || buyer.publicKey.toBase58())
     const selfPay = seller.equals(buyer.publicKey)
-    const reference = Keypair.generate().publicKey
     // floor at the rent-exempt minimum (~0.00089 SOL) so paying a brand-new seller in one release
     // leaves it rent-exempt; below that the release is rejected ("insufficient funds for rent").
     const amount = Math.max(0.001, Number.isFinite(amountSol) ? amountSol : 0.001)
+
+    // bind the reference to the order: fixture + its verified fair favourite + a nonce. A reference is
+    // just a 32-byte PDA seed (need not be on-curve), so a sha256 digest works directly as the PublicKey.
+    const fx = (await board()).find((f) => String(f.FixtureId) === fixtureId)
+    const fav = fx ? favouriteOf(fx) : undefined
+    const nonce = Date.now()
+    const preimage = fav
+      ? `txodds:${fixtureId}:${fav.label}@${fav.fairOdds}:${nonce}`
+      : `txodds:${fixtureId || 'unknown'}:${nonce}`
+    const reference = new PublicKey(createHash('sha256').update(preimage).digest())
+
     const program = await makeProgram(buyer, RPC)
     const depositSig = await deposit(program, buyer, seller, reference, amount, 600)
     const releaseSig = await release(program, buyer, seller, reference)
@@ -174,6 +196,10 @@ async function settle(amountSol: number): Promise<unknown> {
     return {
       ok: true, amountSol: amount, reference: reference.toBase58(),
       buyer: buyer.publicKey.toBase58(), seller: seller.toBase58(), selfPay,
+      order: {
+        fixtureId, matchup: fx ? `${fx.Participant1} v ${fx.Participant2}` : undefined,
+        favourite: fav?.label, fairOdds: fav?.fairOdds, nonce, preimage,
+      },
       deposit: { sig: depositSig, explorer: expl('tx', depositSig) },
       release: { sig: releaseSig, explorer: expl('tx', releaseSig) },
       escrow: { pda, explorer: expl('address', pda) },
@@ -212,8 +238,9 @@ http
         }
         res.end(JSON.stringify(await analyzeEdge({ fixtureId, odds, fixtures })))
       } else if (url.pathname === '/api/settle') {
-        // real devnet escrow deposit→release so the demo links the settlement on-chain.
-        res.end(JSON.stringify(await settle(Number(url.searchParams.get('amount') ?? '0.0005'))))
+        // real devnet escrow deposit→release, with the reference bound to the order (fixture + read).
+        const amount = Number(url.searchParams.get('amount') ?? '0.001')
+        res.end(JSON.stringify(await settle(amount, url.searchParams.get('fixtureId') ?? '')))
       } else {
         res.statusCode = 404
         res.end(JSON.stringify({ error: 'not found' }))
