@@ -24,6 +24,107 @@
 import { TxLineClient } from './txline.js'
 import { analyzeEdge } from './edge.js'
 
+type PdfJob = {
+  name?: string
+  files?: number
+  operation?: string
+  sensitive?: boolean
+  scanned?: boolean
+  deadlineHours?: number
+  output?: string
+}
+
+const defaultPdfJobs: PdfJob[] = [
+  {
+    name: 'monthly invoices',
+    files: 24,
+    operation: 'merge, compress, rename',
+    sensitive: true,
+    scanned: false,
+    deadlineHours: 48,
+    output: 'searchable PDF archive + ZIP',
+  },
+  {
+    name: 'student report scans',
+    files: 6,
+    operation: 'OCR, split, watermark',
+    sensitive: false,
+    scanned: true,
+    deadlineHours: 24,
+    output: 'submission-ready PDF',
+  },
+]
+
+function parsePdfJobs(input: string): PdfJob[] {
+  const raw = input.trim()
+  if (!raw) return defaultPdfJobs
+
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) return parsed
+    if (Array.isArray(parsed.jobs)) return parsed.jobs
+  } catch {
+    // Fall through to compact text parsing.
+  }
+
+  return raw.split(';').map((chunk, index) => {
+    const parts = chunk.split(',').map((part) => part.trim()).filter(Boolean)
+    return {
+      name: parts[0] || `pdf-job-${index + 1}`,
+      operation: parts[1] || 'classify and quote',
+      files: Number(parts[2]) || undefined,
+      sensitive: /sensitive|private|contract|invoice|id|payroll/i.test(chunk),
+      scanned: /scan|ocr|image/i.test(chunk),
+      output: parts[3] || 'PDF',
+    }
+  })
+}
+
+function classifyPdfJob(job: PdfJob) {
+  const files = Math.max(0, Number(job.files ?? 0))
+  const risks = [
+    job.sensitive ? 'sensitive files require private handling' : '',
+    job.scanned ? 'scanned PDFs need OCR quality checks' : '',
+    files > 50 ? 'large batch requires naming and delivery controls' : '',
+    job.deadlineHours && job.deadlineHours < 24 ? 'short deadline increases delivery risk' : '',
+    /redact|signature|legal|medical|payroll/i.test(job.operation ?? '') ? 'operation may require manual verification' : '',
+  ].filter(Boolean)
+
+  const score = risks.length + (files > 20 ? 1 : 0)
+  const status = score >= 3 ? 'needs-scope' : score >= 1 ? 'quote-ready-with-cautions' : 'simple'
+
+  return {
+    name: job.name || 'unnamed PDF job',
+    status,
+    operation: job.operation || 'classify and quote',
+    files,
+    output: job.output || 'PDF',
+    risks,
+    recommendedPriceUsd: status === 'simple' ? '9-19' : status === 'quote-ready-with-cautions' ? '29-79' : 'custom scope first',
+    deliveryChecklist: [
+      'confirm final operation list',
+      'confirm file count and output format',
+      job.sensitive ? 'process only in a private/local workflow' : 'standard processing acceptable',
+      job.scanned ? 'sample OCR result before full batch' : 'spot-check final PDFs',
+    ],
+  }
+}
+
+function deliverPdfWorkflowDiagnosis(request: string): string {
+  const jobs = parsePdfJobs(request)
+  const diagnoses = jobs.map(classifyPdfJob)
+  return JSON.stringify({
+    service: 'pdf-workflow-diagnosis-agent',
+    buyerValue: 'turns messy PDF requests into a quote-ready workflow before money is spent',
+    market: 'freelancers, students, small offices, and document-heavy teams',
+    priceLogic: 'agents bid based on file count, sensitivity, OCR needs, and delivery risk',
+    settlementProof: 'the diagnosis is the paid deliverable released through devnet escrow',
+    diagnoses,
+    nextAction: 'choose simple self-serve processing, a fixed-price cleanup, or custom private workflow setup',
+    timestamp: new Date().toISOString(),
+  }, null, 2)
+}
+
 export async function deliverService(request: string): Promise<string> {
   const tokens = request.trim().split(/\s+/).filter(Boolean)
   // A bare fixture id (single numeric token) is treated as `edge <id>` — the on-thesis product (so a
@@ -35,6 +136,12 @@ export async function deliverService(request: string): Promise<string> {
 
   try {
     switch (verb) {
+      case 'pdf':
+      case 'diagnose':
+      case 'workflow': {
+        return deliverPdfWorkflowDiagnosis(rest.join(' '))
+      }
+
       case 'fixtures': {
         const fixtures = await client.fixtures()
         return JSON.stringify({
